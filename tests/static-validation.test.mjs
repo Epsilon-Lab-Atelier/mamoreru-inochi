@@ -13,12 +13,22 @@ test('service worker and manifest use GitHub Pages-safe relative paths', () => {
   assert.ok(manifest.start_url.startsWith('./'));
   const worker = read('service-worker.js');
   assert.match(worker, /self\.registration\.scope/);
+  assert.match(worker, /src\/public-data\.js/);
+  assert.match(worker, /version\.json/);
 });
 
 test('runtime HTML has no remote script or stylesheet dependencies', () => {
   const html = read('index.html');
   assert.doesNotMatch(html, /<script[^>]+src=["']https?:/i);
-  assert.doesNotMatch(html, /<link[^>]+href=["']https?:/i);
+  assert.doesNotMatch(html, /<link[^>]+rel=["']stylesheet["'][^>]+href=["']https?:/i);
+});
+
+test('OGP metadata uses an absolute 1200x630 preview image and concise description', () => {
+  const html = read('index.html');
+  assert.match(html, /og:image" content="https:\/\/epsilon-lab-atelier\.github\.io\/mamoreru-inochi\/assets\/og-image\.png\?v=0\.2\.0/);
+  assert.match(html, /og:image:width" content="1200"/);
+  assert.match(html, /og:image:height" content="630"/);
+  assert.match(html, /生活環境に合わせて、災害リスク・備蓄・緊急時の行動を確認できる無料の防災アプリです。/);
 });
 
 test('public URLs point to Epsilon-Lab-Atelier', () => {
@@ -30,6 +40,40 @@ test('public URLs point to Epsilon-Lab-Atelier', () => {
   assert.ok(read('robots.txt').includes(`${expectedPages}sitemap.xml`));
 });
 
-test('owner-only package documents are ignored by Git', () => {
-  assert.match(read('.gitignore'), /^\/LOCAL_ONLY\/$/m);
+test('font-size UI applies a root scale without an obstructive change toast', () => {
+  const html = read('index.html');
+  const app = read('src/app.js');
+  assert.match(html, /id="font-size-panel"/);
+  assert.match(html, /文字サイズ: 100%/);
+  assert.match(app, /document\.documentElement\.style\.setProperty\('--font-scale'/);
+  assert.match(app, /const allowed = \[85, 100, 115, 130, 150, 175, 200\]/);
+  assert.doesNotMatch(app, /fontSizePanel\?\.addEventListener\('click',[^\n]*stopPropagation/);
+  assert.doesNotMatch(app, /文字サイズを[^。\n]{0,30}変更しました/);
+});
+
+test('update flow waits for user action before activating a new worker', () => {
+  const app = read('src/app.js');
+  const worker = read('service-worker.js');
+  assert.match(app, /serviceWorkerRegistration\.update\(\)/);
+  assert.match(app, /data-action="apply-update"/);
+  assert.match(worker, /event\.data\?\.type === 'SKIP_WAITING'/);
+  const install = worker.match(/addEventListener\('install'[\s\S]*?\n\}\);/)?.[0] ?? '';
+  assert.doesNotMatch(install, /skipWaiting/);
+});
+
+test('public-data communication is restricted to approved official providers', () => {
+  const html = read('index.html');
+  const publicData = read('src/public-data.js');
+  for (const host of ['www.j-shis.bosai.go.jp', 'cyberjapandata.gsi.go.jp', 'www.jma.go.jp']) {
+    assert.ok(html.includes(host));
+    assert.ok(publicData.includes(host));
+  }
+  assert.doesNotMatch(read('src/app.js'), /\bfetch\s*\(/);
+});
+
+test('owner-only documents and downloaded release archives are ignored by Git', () => {
+  const gitignore = read('.gitignore');
+  assert.match(gitignore, /^\/LOCAL_ONLY\/$/m);
+  assert.match(gitignore, /^\/mamoreru-inochi-\*\.zip$/m);
+  assert.match(gitignore, /^\/mamoreru-inochi-\*\.zip\.sha256$/m);
 });

@@ -1,8 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="守れるいのち">
-  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#173f3a"/><stop offset="1" stop-color="#27685f"/></linearGradient></defs>
-  <rect width="512" height="512" rx="112" fill="url(#g)"/>
-  <path d="M256 76 405 138l-13 150-136 154L120 288l-13-150Z" fill="#fff"/>
-  <path d="M256 112 367 158l-11 119-100 113-100-113-11-119Z" fill="#e8f4f1"/>
-  <path d="M256 286c-19-26-74-52-74-101 0-31 22-53 51-53 17 0 33 8 43 22 10-14 26-22 43-22 29 0 51 22 51 53 0 49-55 75-114 101Z" fill="#db704e"/>
-  <path d="M163 315h52l25 37 32-78 28 41h50" fill="none" stroke="#173f3a" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+<title id="title">守れるいのち</title><desc id="desc">家とハートを両手で包む、温かみのある防災アプリアイコン</desc>
+<rect width="512" height="512" rx="96" fill="#F7EFE3"/><circle cx="414" cy="86" r="46" fill="#E7BA6B"/><circle cx="100" cy="420" r="55" fill="#E9D7BD"/>
+<rect x="42" y="42" width="428" height="428" rx="92" fill="#FFF9EF"/><circle cx="256" cy="230" r="135" fill="#E7F0E9"/>
+<path d="M171 220 256 150l85 70" fill="#315F50"/><rect x="187" y="205" width="138" height="130" rx="18" fill="#FFFFFF"/><rect x="238" y="275" width="36" height="60" rx="9" fill="#E7A07D"/>
+<path d="M256 270c-27-20-38-38-38-54 0-17 13-28 29-28 5 0 9 4 9 11 0-7 4-11 9-11 16 0 29 11 29 28 0 16-11 34-38 54Z" fill="#D86D5C"/>
+<path d="M120 254c14 79 57 129 132 139" fill="none" stroke="#E7A07D" stroke-width="29" stroke-linecap="round"/><path d="M392 254c-14 79-57 129-132 139" fill="none" stroke="#E7A07D" stroke-width="29" stroke-linecap="round"/>
+<path d="M155 365h86M271 365h86" stroke="#E7A07D" stroke-width="36" stroke-linecap="round"/><path d="M167 358c42 64 136 64 178 0" fill="none" stroke="#638C78" stroke-width="13" stroke-linecap="round"/>
 </svg>

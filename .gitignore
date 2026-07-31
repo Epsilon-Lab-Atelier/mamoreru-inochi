@@ -9,3 +9,7 @@ node_modules/
 
 # Package-only owner documents (never publish)
 /LOCAL_ONLY/
+
+# Downloaded release packages (kept outside Git)
+/mamoreru-inochi-*.zip
+/mamoreru-inochi-*.zip.sha256

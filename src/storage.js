@@ -10,7 +10,7 @@ const DATA_KEY = 'app-data';
 function openDatabase() {
   return new Promise((resolve, reject) => {
     if (!globalThis.indexedDB) {
-      reject(new Error('このブラウザーでは端末保存を利用できません。'));
+      reject(new Error('このブラウザでは端末保存を利用できません。'));
       return;
     }
     const request = globalThis.indexedDB.open(DB_NAME, DB_VERSION);

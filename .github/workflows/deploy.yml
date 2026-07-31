@@ -29,7 +29,7 @@ jobs:
       - name: Prepare static site
         run: |
           mkdir -p _site
-          cp index.html offline.html manifest.webmanifest service-worker.js robots.txt sitemap.xml .nojekyll _site/
+          cp index.html offline.html manifest.webmanifest service-worker.js version.json robots.txt sitemap.xml .nojekyll _site/
           cp -R assets src _site/
       - name: Setup Pages
         uses: actions/configure-pages@v5

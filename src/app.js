@@ -1,5 +1,7 @@
 import {
   ANSWER_OPTIONS,
+  CUSTOM_CONTACT_TYPES,
+  EMERGENCY_CONTACTS,
   EMERGENCY_GUIDES,
   HAZARDS,
   HOME_SAFETY_GROUPS,
@@ -10,6 +12,17 @@ import {
   RISK_SECTIONS,
   STOCKPILE_FIELDS
 } from './data.js';
+import {
+  GSI_HAZARD_LAYERS,
+  JMA_OFFICES,
+  PUBLIC_DATA_PROVIDERS,
+  buildGsiMapUrl,
+  fetchGsiPlaces,
+  fetchJmaWarnings,
+  fetchJshisHazard,
+  formatProbability,
+  normalizeCoordinates
+} from './public-data.js';
 import { calculateRiskAssessment, emptyRiskAnswers, RISK_LEVELS } from './risk-engine.js';
 import {
   analyzeInventory,
@@ -54,6 +67,9 @@ const main = document.querySelector('#main-content');
 const statusStrip = document.querySelector('#persistent-status');
 const toastRegion = document.querySelector('#toast-region');
 const dialogRoot = document.querySelector('#dialog-root');
+const updateBanner = document.querySelector('#app-update-banner');
+const fontMenuButton = document.querySelector('#font-menu-button');
+const fontSizePanel = document.querySelector('#font-size-panel');
 
 let state = createDefaultState();
 let protectedPassphrase = '';
@@ -62,6 +78,11 @@ let lockedMetadata = null;
 let deferredInstallPrompt = null;
 let serviceWorkerRegistration = null;
 let editingInventoryId = null;
+let editingCustomContactId = null;
+let updateCheckTimer = null;
+let lastUpdateCheckAt = 0;
+const sessionNetworkConsents = new Set();
+let visibleMapLocationId = null;
 let offlineStatus = {
   online: navigator.onLine,
   serviceWorkerSupported: 'serviceWorker' in navigator,
@@ -111,6 +132,18 @@ function createDefaultState() {
       notes: '',
       updatedAt: null
     },
+    locations: {
+      items: [],
+      activeId: null,
+      selectedHazard: 'earthquake'
+    },
+    network: {
+      consents: {},
+      logs: []
+    },
+    contacts: {
+      custom: []
+    },
     audit: {
       createdAt: now,
       lastSavedAt: null,
@@ -152,7 +185,34 @@ function mergeWithDefaults(saved) {
       items: { ...defaults.homeSafety.items, ...(saved.homeSafety?.items ?? {}) }
     },
     familyPlan: { ...defaults.familyPlan, ...(saved.familyPlan ?? {}) },
-    audit: { ...defaults.audit, ...(saved.audit ?? {}) }
+    locations: {
+      ...defaults.locations,
+      ...(saved.locations ?? {}),
+      items: Array.isArray(saved.locations?.items)
+        ? saved.locations.items.map((item) => ({
+            ...item,
+            publicData: {
+              jshis: item?.publicData?.jshis ?? null,
+              gsi: item?.publicData?.gsi ?? null,
+              jma: item?.publicData?.jma ?? null
+            }
+          }))
+        : []
+    },
+    network: {
+      ...defaults.network,
+      ...(saved.network ?? {}),
+      consents: { ...defaults.network.consents, ...(saved.network?.consents ?? {}) },
+      logs: Array.isArray(saved.network?.logs) ? saved.network.logs.slice(0, 100) : []
+    },
+    contacts: {
+      ...defaults.contacts,
+      ...(saved.contacts ?? {}),
+      custom: Array.isArray(saved.contacts?.custom) ? saved.contacts.custom : []
+    },
+    audit: { ...defaults.audit, ...(saved.audit ?? {}) },
+    schemaVersion: SCHEMA_VERSION,
+    appVersion: APP_VERSION
   };
 }
 
@@ -179,6 +239,7 @@ async function initialize() {
 
   applyPreferences();
   render();
+  scheduleUpdateChecks();
 }
 
 function bindGlobalEvents() {
@@ -187,6 +248,7 @@ function bindGlobalEvents() {
     offlineStatus.online = true;
     await refreshOfflineStatus();
     renderOfflineIndicatorOnly();
+    checkForUpdate({ quiet: true, minIntervalMs: 0 });
   });
   window.addEventListener('offline', () => {
     offlineStatus.online = false;
@@ -205,13 +267,31 @@ function bindGlobalEvents() {
     renderOfflineIndicatorOnly();
   });
 
-  document.querySelector('#font-decrease')?.addEventListener('click', () => changeFontScale(-1));
-  document.querySelector('#font-increase')?.addEventListener('click', () => changeFontScale(1));
+  fontMenuButton?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const willOpen = fontSizePanel?.hidden !== false;
+    if (fontSizePanel) fontSizePanel.hidden = !willOpen;
+    fontMenuButton.setAttribute('aria-expanded', String(willOpen));
+  });
+
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') checkForUpdate({ quiet: true, minIntervalMs: 60_000 });
+  });
+  window.addEventListener('focus', () => checkForUpdate({ quiet: true, minIntervalMs: 60_000 }));
 
   document.addEventListener('click', handleGlobalClick);
 }
 
 async function handleGlobalClick(event) {
+  const fontOption = event.target.closest('[data-font-scale]');
+  if (fontOption) {
+    event.preventDefault();
+    setFontScale(Number(fontOption.dataset.fontScale));
+    return;
+  }
+  if (!event.target.closest('.font-menu-wrap')) closeFontMenu();
+
   const target = event.target.closest('[data-action]');
   if (!target) return;
   const action = target.dataset.action;
@@ -271,6 +351,54 @@ async function handleGlobalClick(event) {
     if (serviceWorkerRegistration?.waiting) {
       serviceWorkerRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
     }
+  } else if (action === 'dismiss-update') {
+    event.preventDefault();
+    updateBanner.hidden = true;
+  } else if (action === 'use-current-location') {
+    event.preventDefault();
+    await fillCurrentLocation();
+  } else if (action === 'location-select') {
+    event.preventDefault();
+    state.locations.activeId = target.dataset.id || null;
+    persistDebounced();
+    render();
+  } else if (action === 'location-delete') {
+    event.preventDefault();
+    await deleteLocation(target.dataset.id);
+  } else if (action === 'fetch-jshis') {
+    event.preventDefault();
+    await fetchLocationPublicData('jshis');
+  } else if (action === 'fetch-gsi') {
+    event.preventDefault();
+    await fetchLocationPublicData('gsi');
+  } else if (action === 'fetch-jma') {
+    event.preventDefault();
+    await fetchLocationPublicData('jma');
+  } else if (action === 'show-gsi-map') {
+    event.preventDefault();
+    await showLocationMap();
+  } else if (action === 'clear-location-data') {
+    event.preventDefault();
+    await clearActiveLocationPublicData();
+  } else if (action === 'clear-network-log') {
+    event.preventDefault();
+    state.network.logs = [];
+    persistDebounced();
+    render();
+  } else if (action === 'contact-call') {
+    event.preventDefault();
+    await confirmPhoneCall(target.dataset.contactId, target.dataset.customId);
+  } else if (action === 'contact-edit') {
+    event.preventDefault();
+    editingCustomContactId = target.dataset.id || null;
+    render();
+  } else if (action === 'contact-cancel') {
+    event.preventDefault();
+    editingCustomContactId = null;
+    render();
+  } else if (action === 'contact-delete') {
+    event.preventDefault();
+    await deleteCustomContact(target.dataset.id);
   } else if (action === 'inventory-edit') {
     event.preventDefault();
     editingInventoryId = target.dataset.id || null;
@@ -298,23 +426,33 @@ async function handleGlobalClick(event) {
   }
 }
 
-function changeFontScale(direction) {
-  const scales = [100, 115, 130, 150, 175, 200];
-  const currentIndex = Math.max(0, scales.indexOf(Number(state.preferences.fontScale)));
-  const nextIndex = Math.min(scales.length - 1, Math.max(0, currentIndex + direction));
-  state.preferences.fontScale = scales[nextIndex];
+function setFontScale(scale) {
+  const allowed = [85, 100, 115, 130, 150, 175, 200];
+  const normalized = allowed.includes(Number(scale)) ? Number(scale) : 100;
+  state.preferences.fontScale = normalized;
   applyPreferences();
   persistDebounced();
-  showToast(`文字サイズを${scales[nextIndex]}%にしました。`);
+}
+
+function closeFontMenu() {
+  if (fontSizePanel) fontSizePanel.hidden = true;
+  fontMenuButton?.setAttribute('aria-expanded', 'false');
 }
 
 function applyPreferences() {
-  const body = document.body;
-  for (const size of [100, 115, 130, 150, 175, 200]) body.classList.remove(`font-${size}`);
-  body.classList.add(`font-${state.preferences.fontScale || 100}`);
-  body.classList.toggle('high-contrast', Boolean(state.preferences.highContrast));
-  body.classList.toggle('reduced-motion', Boolean(state.preferences.reducedMotion));
-  body.classList.toggle('easy-mode', Boolean(state.preferences.easyMode));
+  const scale = Number(state.preferences.fontScale) || 100;
+  document.documentElement.style.setProperty('--font-scale', String(scale / 100));
+  document.body.classList.toggle('high-contrast', Boolean(state.preferences.highContrast));
+  document.body.classList.toggle('reduced-motion', Boolean(state.preferences.reducedMotion));
+  document.body.classList.toggle('easy-mode', Boolean(state.preferences.easyMode));
+  if (fontMenuButton) fontMenuButton.textContent = `文字 ${scale}%`;
+  const current = document.querySelector('#font-size-current');
+  if (current) current.innerHTML = `<strong>文字サイズ: ${scale}%</strong>`;
+  document.querySelectorAll('[data-font-scale]').forEach((button) => {
+    const selected = Number(button.dataset.fontScale) === scale;
+    button.classList.toggle('selected', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
 }
 
 async function persistCurrentState() {
@@ -342,14 +480,14 @@ function render() {
   updateNavigation(route.first);
   renderPersistentStatus(route);
 
-  if (isLocked && route.first !== 'emergency') {
+  if (isLocked && !['emergency', 'contacts', 'help', 'about', 'sources', 'install'].includes(route.first)) {
     main.innerHTML = renderUnlockPage();
     bindUnlockPage();
     focusPageHeading();
     return;
   }
 
-  if (!state.onboardingComplete && !['emergency', 'help', 'about', 'sources'].includes(route.first)) {
+  if (!state.onboardingComplete && !['emergency', 'contacts', 'help', 'about', 'sources', 'install'].includes(route.first)) {
     main.innerHTML = renderOnboarding();
     bindOnboarding();
     focusPageHeading();
@@ -375,6 +513,15 @@ function render() {
       break;
     case 'family':
       html = renderFamilyPlan();
+      break;
+    case 'locations':
+      html = renderLocations();
+      break;
+    case 'contacts':
+      html = renderContacts();
+      break;
+    case 'install':
+      html = renderInstallAndUpdates();
       break;
     case 'emergency':
       html = route.second ? renderEmergencyDetail(route.second) : renderEmergencyOverview();
@@ -475,12 +622,12 @@ function renderOnboarding() {
       </div>
 
       <section class="card section" aria-labelledby="privacy-heading">
-        <h2 id="privacy-heading">入力内容は外部へ送信しません</h2>
+        <h2 id="privacy-heading">診断や備蓄の入力は外部へ送信しません</h2>
         <div class="notice privacy">
-          <p><strong>診断や備蓄チェックで入力した内容は、この端末のブラウザー内だけで処理します。</strong></p>
-          <p>保存を選んだ場合も、回答内容をEpsilonLab、GitHub、その他の外部サーバーへ送信する処理はありません。広告、アクセス解析、外部JavaScriptも使用していません。</p>
+          <p><strong>診断や備蓄チェックで入力した内容は、この端末のブラウザ内だけで処理します。</strong></p>
+          <p>地域情報は、送信先・目的・内容を確認して許可した場合だけ、公的機関へ問い合わせます。EpsilonLabへ位置情報や回答を送る処理はありません。広告、アクセス解析、外部JavaScriptも使用していません。</p>
         </div>
-        <p>同じ端末・同じブラウザーを使う人は、保存内容を開ける場合があります。共有端末では「保存しない」または「パスフレーズで保護」を選んでください。ブラウザーのデータ消去や端末故障で失われることがあるため、必要に応じてバックアップを書き出せます。</p>
+        <p>同じ端末・同じブラウザを使う人は、保存内容を開ける場合があります。共有端末では「保存しない」または「パスフレーズで保護」を選んでください。ブラウザのデータ消去や端末故障で失われることがあるため、必要に応じてバックアップを書き出せます。</p>
       </section>
 
       <form id="onboarding-form" class="section" novalidate>
@@ -489,7 +636,7 @@ function renderOnboarding() {
           <div class="grid two">
             ${storageOption('none', '保存しない', 'この画面を開いている間だけ使います。再読み込みや終了で回答は消えます。')}
             ${storageOption('result', '診断結果だけ保存', '回答そのものは残さず、優先度・理由・確認項目だけを保存します。途中の回答は再読み込みで消えます。')}
-            ${storageOption('full', 'この端末に保存', '診断回答、備蓄、家の安全、家族計画をブラウザー内へ保存します。', true)}
+            ${storageOption('full', 'この端末に保存', '診断回答、備蓄、家の安全、家族計画、地域情報、任意連絡先をブラウザ内へ保存します。', true)}
             ${storageOption('protected', 'パスフレーズで保護して保存', '保存内容を暗号化します。開くたびにパスフレーズが必要です。忘れると復元できません。')}
           </div>
 
@@ -512,8 +659,7 @@ function renderOnboarding() {
             <div class="form-field">
               <label for="initial-font-scale">文字サイズ</label>
               <select id="initial-font-scale" name="fontScale">
-<option value="85" ${Number(state.preferences.fontScale) === 85 ? "selected" : ""}>小さめ（85%）</option>
-                ${[100,115,130,150,175,200].map((size) => `<option value="${size}"${size === 100 ? ' selected' : ''}>${size}%</option>`).join('')}
+                ${[85,100,115,130,150,175,200].map((size) => `<option value="${size}"${Number(state.preferences.fontScale) === size ? ' selected' : ''}>${size === 85 ? '小さめ（85%）' : `${size}%`}</option>`).join('')}
               </select>
             </div>
             <div class="form-field">
@@ -616,7 +762,7 @@ function bindOnboarding() {
 function renderUnlockPage() {
   return `
     <div class="page-container onboarding-shell">
-      ${pageHeader('保護された保存データ', 'パスフレーズで開く', '診断・備蓄・家族計画は暗号化され、この端末のブラウザー内に保存されています。')}
+      ${pageHeader('保護された保存データ', 'パスフレーズで開く', '診断・備蓄・家族計画は暗号化され、この端末のブラウザ内に保存されています。')}
       <div class="notice privacy">
         <p>パスフレーズは外部へ送信されません。正しいパスフレーズで復号できたときだけ、保存内容を表示します。</p>
       </div>
@@ -786,6 +932,33 @@ function renderDashboard() {
         </section>
 
         <section class="card clickable">
+          <a class="card-link" href="#/locations">
+            <div class="card-icon" aria-hidden="true">地</div>
+            <h2>地域情報</h2>
+            <p>登録地点の地震ハザード、避難先、警報・注意報を、必要なときだけ取得します。</p>
+            <p class="link-label">${state.locations.items.length}地点を登録中</p>
+          </a>
+        </section>
+
+        <section class="card clickable">
+          <a class="card-link" href="#/contacts">
+            <div class="card-icon" aria-hidden="true">電</div>
+            <h2>緊急連絡先</h2>
+            <p>119・110・118の使い分け、医療相談、道路、災害伝言をまとめて確認できます。</p>
+            <p class="link-label">連絡先一覧を見る</p>
+          </a>
+        </section>
+
+        <section class="card clickable">
+          <a class="card-link" href="#/install">
+            <div class="card-icon" aria-hidden="true">＋</div>
+            <h2>インストールと更新</h2>
+            <p>ホーム画面への追加、オフライン準備、新しい版への更新方法を確認します。</p>
+            <p class="link-label">端末での使い方を見る</p>
+          </a>
+        </section>
+
+        <section class="card clickable">
           <a class="card-link" href="#/help">
             <div class="card-icon" aria-hidden="true">?</div>
             <h2>使い方とヘルプ</h2>
@@ -801,7 +974,7 @@ function renderDashboard() {
 
       <div class="notice privacy section">
         <h2>現在の保存方法: ${escapeHtml(storageModeLabel())}</h2>
-        <p>診断回答や備蓄情報を外部へ送信する機能はありません。保存内容の確認、バックアップ、削除は「データと設定」から行えます。</p>
+        <p>診断回答や備蓄情報は外部へ送信しません。地域情報は、送信先・目的・内容を確認して許可した場合だけ、公的機関へ問い合わせます。保存内容の確認、バックアップ、削除は「データと設定」から行えます。</p>
         <div class="button-row">
           <a class="button secondary small" href="#/settings">データと設定</a>
           <a class="button secondary small" href="#/print">防災計画を印刷</a>
@@ -1133,7 +1306,7 @@ function renderStockpileItems() {
       ${pageHeader('備蓄チェック', '現在ある物を入力する', `${people}人分として、最低3日と安心7日の目安を比較します。`)}
       ${stockpileTabs('items')}
       <div class="notice privacy">
-        <p>数量、備蓄状況、賞味期限は、選択した保存方法に応じてこの端末のブラウザー内だけで扱います。</p>
+        <p>数量、備蓄状況、賞味期限は、選択した保存方法に応じてこの端末のブラウザ内だけで扱います。</p>
       </div>
 
       <form id="stockpile-form" class="section" novalidate>
@@ -1617,6 +1790,639 @@ function bindFamilyPlan() {
   });
 }
 
+function activeLocation() {
+  return state.locations.items.find((item) => item.id === state.locations.activeId) ?? null;
+}
+
+function blankLocation() {
+  return {
+    id: '',
+    name: '',
+    latitude: '',
+    longitude: '',
+    jmaOfficeCode: '',
+    publicData: { jshis: null, gsi: null, jma: null }
+  };
+}
+
+function renderLocations() {
+  const selected = activeLocation();
+  const formLocation = selected ?? blankLocation();
+  const canUseLocation = 'geolocation' in navigator;
+  return `
+    <div class="page-container">
+      ${pageHeader('地域情報', 'よく使う場所と公的な防災情報', '自宅、職場、学校、実家などを登録し、必要なときだけ公的機関へ問い合わせます。')}
+
+      <section class="notice privacy">
+        <h2>位置情報は、許可するまで外部へ送りません</h2>
+        <p>地点名と座標は、このアプリの保存方法に従って端末内で扱います。J-SHIS、国土地理院、気象庁から情報を取得するときは、送信先・目的・送信内容を事前に表示します。EpsilonLabへ位置情報を送信する処理はありません。</p>
+      </section>
+
+      <section class="grid two section">
+        <div class="card">
+          <div class="section-heading">
+            <div><p class="eyebrow">地点を登録</p><h2>${selected ? '選択中の地点を編集' : '新しい地点を追加'}</h2></div>
+            ${selected ? '<button class="button subtle small" type="button" data-action="location-new">新規追加へ</button>' : ''}
+          </div>
+          <form id="location-form" novalidate>
+            <input type="hidden" name="id" value="${escapeHtml(formLocation.id)}">
+            <div class="form-grid">
+              <div class="form-field full">
+                <label for="location-name">地点名</label>
+                <input id="location-name" name="name" type="text" maxlength="60" required value="${escapeHtml(formLocation.name)}" placeholder="例: 自宅、職場、実家">
+              </div>
+              <div class="form-field">
+                <label for="location-latitude">緯度</label>
+                <input id="location-latitude" name="latitude" type="number" min="-90" max="90" step="0.000001" required value="${escapeHtml(formLocation.latitude)}" placeholder="35.681236">
+              </div>
+              <div class="form-field">
+                <label for="location-longitude">経度</label>
+                <input id="location-longitude" name="longitude" type="number" min="-180" max="180" step="0.000001" required value="${escapeHtml(formLocation.longitude)}" placeholder="139.767125">
+              </div>
+              <div class="form-field full">
+                <label for="location-jma-office">警報・注意報を確認する地域</label>
+                <select id="location-jma-office" name="jmaOfficeCode">
+                  <option value="">選択してください</option>
+                  ${JMA_OFFICES.map((office) => `<option value="${office.code}"${formLocation.jmaOfficeCode === office.code ? ' selected' : ''}>${escapeHtml(office.name)}</option>`).join('')}
+                </select>
+                <p class="hint">住所は入力しません。警報・注意報は選択した地域単位で取得します。</p>
+              </div>
+            </div>
+            <div class="button-row">
+              <button class="button" type="submit">${selected ? '地点を更新する' : '地点を追加する'}</button>
+              <button class="button secondary" type="button" data-action="use-current-location"${canUseLocation ? '' : ' disabled'}>現在地をフォームへ入力</button>
+            </div>
+            <p class="small-text muted">「現在地をフォームへ入力」は端末の位置情報機能を使いますが、それだけでは公的機関へ問い合わせません。</p>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="section-heading"><div><p class="eyebrow">登録済み</p><h2>よく使う場所</h2></div><span class="badge">${state.locations.items.length}件</span></div>
+          ${state.locations.items.length ? `<div class="location-list">${state.locations.items.map((item) => `
+            <article class="card location-card${item.id === state.locations.activeId ? ' selected' : ''}">
+              <h3>${escapeHtml(item.name)}</h3>
+              <p class="location-coordinates">緯度 ${Number(item.latitude).toFixed(5)} / 経度 ${Number(item.longitude).toFixed(5)}</p>
+              <p>${escapeHtml(JMA_OFFICES.find((office) => office.code === item.jmaOfficeCode)?.name || '警報地域は未設定')}</p>
+              <div class="button-row">
+                <button class="button small" type="button" data-action="location-select" data-id="${escapeHtml(item.id)}">${item.id === state.locations.activeId ? '選択中' : 'この地点を見る'}</button>
+                <button class="button danger small" type="button" data-action="location-delete" data-id="${escapeHtml(item.id)}">削除</button>
+              </div>
+            </article>`).join('')}</div>` : '<div class="empty-state"><h3>まだ地点がありません</h3><p>住所を入力せず、地点名・緯度・経度だけで登録できます。</p></div>'}
+        </div>
+      </section>
+
+      ${selected ? renderLocationDataPanel(selected) : `
+        <section class="empty-state card section">
+          <h2>地点を追加すると、公的情報を確認できます</h2>
+          <p>J-SHISの地震ハザード、国土地理院の指定緊急避難場所・指定避難所・指定福祉避難所、気象庁の警報・注意報を、個別に許可して取得できます。</p>
+        </section>`}
+
+      ${renderCommunicationLog()}
+    </div>`;
+}
+
+function renderLocationDataPanel(locationItem) {
+  const jshis = locationItem.publicData?.jshis;
+  const gsi = locationItem.publicData?.gsi;
+  const jma = locationItem.publicData?.jma;
+  const hazard = GSI_HAZARD_LAYERS[state.locations.selectedHazard] ?? GSI_HAZARD_LAYERS.earthquake;
+  return `
+    <section class="section" aria-labelledby="public-data-title">
+      <div class="section-heading">
+        <div><p class="eyebrow">選択中: ${escapeHtml(locationItem.name)}</p><h2 id="public-data-title">公的な防災情報</h2></div>
+        <span class="badge ${navigator.onLine ? 'success' : 'warning'}">${navigator.onLine ? 'オンライン' : 'オフライン'}</span>
+      </div>
+      <p>取得済みの情報は端末内に残り、オフラインでも最後に取得した内容を確認できます。情報の時刻を必ず確認し、最新情報は各機関・自治体の公式情報を優先してください。</p>
+
+      <div class="public-data-grid">
+        <article class="card">
+          <p class="eyebrow">J-SHIS</p>
+          <h3>今後30年間の地震動確率</h3>
+          ${jshis ? renderJshisResult(jshis) : '<p>まだ取得していません。選択地点の緯度・経度を防災科学技術研究所へ送信します。</p>'}
+          <div class="button-row"><button class="button small" type="button" data-action="fetch-jshis"${navigator.onLine ? '' : ' disabled'}>${jshis ? '地震情報を更新' : '地震情報を取得'}</button></div>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">国土地理院</p>
+          <h3>近くの避難先</h3>
+          <div class="form-field">
+            <label for="gsi-hazard">対応する災害</label>
+            <select id="gsi-hazard" name="gsiHazard">
+              ${Object.values(GSI_HAZARD_LAYERS).map((item) => `<option value="${item.id}"${item.id === hazard.id ? ' selected' : ''}>${escapeHtml(item.name)}</option>`).join('')}
+            </select>
+          </div>
+          ${gsi ? renderGsiResult(gsi) : '<p>まだ取得していません。指定緊急避難場所は災害の種類ごとに対応が異なります。</p>'}
+          <div class="button-row">
+            <button class="button small" type="button" data-action="fetch-gsi"${navigator.onLine ? '' : ' disabled'}>${gsi ? '避難先を更新' : '避難先を取得'}</button>
+            <button class="button secondary small" type="button" data-action="show-gsi-map"${navigator.onLine || visibleMapLocationId === locationItem.id ? '' : ' disabled'}>小さな地図を表示</button>
+          </div>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">気象庁</p>
+          <h3>警報・注意報</h3>
+          ${locationItem.jmaOfficeCode ? (jma ? renderJmaResult(jma) : '<p>まだ取得していません。選択した地域コードだけを気象庁へ送信します。</p>') : '<p>地点の編集画面で「警報・注意報を確認する地域」を選んでください。</p>'}
+          <div class="button-row"><button class="button small" type="button" data-action="fetch-jma"${navigator.onLine && locationItem.jmaOfficeCode ? '' : ' disabled'}>${jma ? '警報・注意報を更新' : '警報・注意報を取得'}</button></div>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">公式地図</p>
+          <h3>地点と周辺を確認</h3>
+          ${visibleMapLocationId === locationItem.id ? renderMiniMap(locationItem) : '<p>地図の表示にも国土地理院への通信が必要です。表示前に確認します。</p>'}
+          <div class="button-row">
+            <a class="button secondary small" href="${escapeHtml(buildGsiMapUrl(locationItem.latitude, locationItem.longitude))}" target="_blank" rel="noopener noreferrer">地理院地図で開く</a>
+            <a class="button secondary small" href="https://disaportal.gsi.go.jp/" target="_blank" rel="noopener noreferrer">ハザードマップを確認</a>
+          </div>
+        </article>
+      </div>
+
+      <div class="button-row">
+        <button class="button danger small" type="button" data-action="clear-location-data">この地点の取得済み情報を削除</button>
+      </div>
+    </section>`;
+}
+
+function renderJshisResult(result) {
+  const values = result.probabilities ?? {};
+  return `
+    <dl class="summary-list">
+      <div><dt>震度5弱以上</dt><dd>${escapeHtml(formatProbability(values.intensity5Lower))}</dd></div>
+      <div><dt>震度5強以上</dt><dd>${escapeHtml(formatProbability(values.intensity5Upper))}</dd></div>
+      <div><dt>震度6弱以上</dt><dd><strong>${escapeHtml(formatProbability(values.intensity6Lower))}</strong></dd></div>
+      <div><dt>震度6強以上</dt><dd>${escapeHtml(formatProbability(values.intensity6Upper))}</dd></div>
+    </dl>
+    <p class="small-text">確率が低くても地震が起きないことを意味しません。建物・家具・避難の備えとは分けて確認してください。</p>
+    <p class="data-source-stamp">取得: ${escapeHtml(formatDateTime(result.fetchedAt))} / 防災科学技術研究所 J-SHIS</p>`;
+}
+
+function renderGsiResult(result) {
+  const emergency = (result.places ?? []).filter((item) => item.kind === 'emergency').slice(0, 8);
+  const shelters = (result.places ?? []).filter((item) => item.kind === 'shelter').slice(0, 8);
+  const welfareShelters = (result.places ?? []).filter((item) => item.kind === 'welfare-shelter').slice(0, 8);
+  const list = (items, empty) => items.length ? `<ul class="shelter-list">${items.map((item) => `<li><strong>${escapeHtml(item.name)}</strong><br><span>${escapeHtml(item.address || '住所情報なし')} / 約${formatNumber(item.distanceKm, 2)}km</span>${item.remarks ? `<br><small>${escapeHtml(item.remarks)}</small>` : ''}</li>`).join('')}</ul>` : `<p>${escapeHtml(empty)}</p>`;
+  return `
+    <p><strong>${escapeHtml(result.hazardName || '選択した災害')}に対応する指定緊急避難場所</strong></p>
+    ${list(emergency, '周辺タイルから該当する指定緊急避難場所を確認できませんでした。')}
+    <details><summary>指定避難所も見る</summary>${list(shelters, '周辺タイルから指定避難所を確認できませんでした。')}</details>
+    <details><summary>指定福祉避難所も見る</summary>${list(welfareShelters, '周辺タイルから指定福祉避難所を確認できませんでした。')}</details>
+    <p class="small-text">指定緊急避難場所、指定避難所、指定福祉避難所は役割が異なります。最新でない場合や未掲載の場合があるため、自治体の最新情報と受入条件を必ず確認してください。</p>
+    <p class="data-source-stamp">取得: ${escapeHtml(formatDateTime(result.fetchedAt))} / 国土地理院</p>`;
+}
+
+function renderJmaResult(result) {
+  const warnings = result.warnings ?? [];
+  return `
+    ${result.headlineText ? `<p>${escapeHtml(result.headlineText)}</p>` : ''}
+    ${warnings.length ? `<ul class="plain-list">${warnings.slice(0, 30).map((item) => `<li><strong>${escapeHtml(item.name)}</strong> - ${escapeHtml(item.areaName)}（${escapeHtml(item.status)}）</li>`).join('')}</ul>` : '<div class="notice success"><p>取得した情報では、表示対象となる警報・注意報は確認されませんでした。</p></div>'}
+    <p class="data-source-stamp">発表: ${escapeHtml(formatDateTime(result.reportDatetime))} / 取得: ${escapeHtml(formatDateTime(result.fetchedAt))} / 気象庁</p>
+    <p class="small-text">発表後に状況が変わることがあります。避難情報は自治体の公式情報も確認してください。</p>`;
+}
+
+function renderMiniMap(locationItem) {
+  const zoom = 15;
+  const latitude = Number(locationItem.latitude);
+  const longitude = Number(locationItem.longitude);
+  const n = 2 ** zoom;
+  const worldX = ((longitude + 180) / 360) * n * 256;
+  const latRad = latitude * Math.PI / 180;
+  const worldY = (1 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2 * n * 256;
+  const centerTileX = Math.floor(worldX / 256);
+  const centerTileY = Math.floor(worldY / 256);
+  const startX = centerTileX - 1;
+  const startY = centerTileY - 1;
+  const markerX = worldX - startX * 256;
+  const markerY = worldY - startY * 256;
+  const tiles = [];
+  for (let dx = 0; dx < 3; dx += 1) {
+    for (let dy = 0; dy < 3; dy += 1) {
+      const x = (startX + dx + n) % n;
+      const y = Math.max(0, Math.min(n - 1, startY + dy));
+      tiles.push(`<img src="https://cyberjapandata.gsi.go.jp/xyz/pale/${zoom}/${x}/${y}.png" alt="" width="256" height="256" loading="lazy" style="left:${dx * 256}px;top:${dy * 256}px">`);
+    }
+  }
+  return `
+    <div class="map-preview" aria-label="${escapeHtml(locationItem.name)}周辺の地理院地図">
+      <div class="map-canvas" style="left:calc(50% - ${markerX}px);top:calc(50% - ${markerY}px)">
+        ${tiles.join('')}
+        <span class="map-marker" style="left:${markerX}px;top:${markerY}px" aria-hidden="true"></span>
+      </div>
+    </div>
+    <p class="small-text muted">中心の印が登録地点です。地図は参考表示です。避難経路や危険区域は公式地図で拡大して確認してください。</p>`;
+}
+
+function renderCommunicationLog() {
+  const logs = state.network.logs ?? [];
+  return `
+    <section class="card section communication-log">
+      <div class="section-heading"><div><p class="eyebrow">この端末だけ</p><h2>外部通信の履歴</h2></div><span class="badge">${logs.length}件</span></div>
+      <p>公的情報を取得したときの送信先・目的・内容を、この端末内だけに記録します。EpsilonLabへ送信しません。</p>
+      ${logs.length ? `<div class="table-wrap"><table class="summary-table"><thead><tr><th>日時</th><th>提供元</th><th>目的・送信内容</th><th>結果</th></tr></thead><tbody>${logs.slice(0, 30).map((log) => `<tr><td>${escapeHtml(formatDateTime(log.at))}</td><td>${escapeHtml(log.providerName)}</td><td>${escapeHtml(log.purpose)}<br><small>${escapeHtml(log.sent)}</small></td><td>${escapeHtml(log.status)}</td></tr>`).join('')}</tbody></table></div>` : '<p>まだ外部通信はありません。</p>'}
+      ${logs.length ? '<div class="button-row"><button class="button danger small" type="button" data-action="clear-network-log">履歴を削除</button></div>' : ''}
+    </section>`;
+}
+
+function bindLocations() {
+  document.querySelector('[data-action="location-new"]')?.addEventListener('click', () => {
+    state.locations.activeId = null;
+    render();
+  });
+  const form = document.querySelector('#location-form');
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const name = String(data.get('name') || '').trim();
+    if (!name) {
+      showToast('地点名を入力してください。', 'error');
+      document.querySelector('#location-name')?.focus();
+      return;
+    }
+    let point;
+    try {
+      point = normalizeCoordinates(data.get('latitude'), data.get('longitude'));
+    } catch (error) {
+      showToast(error.message, 'error');
+      return;
+    }
+    const id = String(data.get('id') || '') || createId('location');
+    const existing = state.locations.items.find((item) => item.id === id);
+    const pointChanged = existing && (Number(existing.latitude) !== point.latitude || Number(existing.longitude) !== point.longitude);
+    const officeChanged = existing && String(existing.jmaOfficeCode || '') !== String(data.get('jmaOfficeCode') || '');
+    const retainedData = existing?.publicData ?? { jshis: null, gsi: null, jma: null };
+    const next = {
+      id,
+      name,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      jmaOfficeCode: String(data.get('jmaOfficeCode') || ''),
+      publicData: {
+        jshis: pointChanged ? null : retainedData.jshis,
+        gsi: pointChanged ? null : retainedData.gsi,
+        jma: officeChanged ? null : retainedData.jma
+      },
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const index = state.locations.items.findIndex((item) => item.id === id);
+    if (index >= 0) state.locations.items[index] = next;
+    else state.locations.items.push(next);
+    state.locations.activeId = id;
+    await persistCurrentState();
+    render();
+    showToast(index >= 0 ? '地点を更新しました。' : '地点を追加しました。');
+  });
+  document.querySelector('#gsi-hazard')?.addEventListener('change', (event) => {
+    state.locations.selectedHazard = event.target.value;
+    persistDebounced();
+  });
+}
+
+async function fillCurrentLocation() {
+  if (!navigator.geolocation) {
+    showToast('この端末では現在地を利用できません。', 'error');
+    return;
+  }
+  const confirmed = await confirmDialog('現在地をフォームへ入力しますか？', '端末の位置情報機能を使います。取得した座標はフォームへ入力するだけで、この操作では公的機関やEpsilonLabへ送信しません。', '現在地を使う');
+  if (!confirmed) return;
+  navigator.geolocation.getCurrentPosition((position) => {
+    const latitude = document.querySelector('#location-latitude');
+    const longitude = document.querySelector('#location-longitude');
+    if (latitude) latitude.value = position.coords.latitude.toFixed(6);
+    if (longitude) longitude.value = position.coords.longitude.toFixed(6);
+    showToast('現在地をフォームへ入力しました。内容を確認して保存してください。');
+  }, (error) => {
+    const message = error.code === 1 ? '位置情報の利用が許可されませんでした。' : '現在地を取得できませんでした。';
+    showToast(message, 'error');
+  }, { enableHighAccuracy: false, timeout: 12000, maximumAge: 300000 });
+}
+
+async function deleteLocation(id) {
+  const item = state.locations.items.find((entry) => entry.id === id);
+  if (!item) return;
+  const confirmed = await confirmDialog('地点を削除しますか？', `「${item.name}」と、この地点で取得した公的情報を端末内から削除します。`, '削除する');
+  if (!confirmed) return;
+  state.locations.items = state.locations.items.filter((entry) => entry.id !== id);
+  if (state.locations.activeId === id) state.locations.activeId = state.locations.items[0]?.id ?? null;
+  if (visibleMapLocationId === id) visibleMapLocationId = null;
+  await persistCurrentState();
+  render();
+}
+
+async function requestNetworkPermission(providerId, locationItem, sent) {
+  const provider = PUBLIC_DATA_PROVIDERS[providerId];
+  if (!provider) return false;
+  if (sessionNetworkConsents.has(providerId) || state.network.consents?.[providerId]) return true;
+  return new Promise((resolve) => {
+    dialogRoot.innerHTML = `
+      <div class="modal-backdrop" role="presentation">
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="network-dialog-title" aria-describedby="network-dialog-message">
+          <p class="eyebrow">外部通信の確認</p>
+          <h2 id="network-dialog-title">${escapeHtml(provider.name)}へ問い合わせますか？</h2>
+          <div id="network-dialog-message">
+            <dl class="summary-list">
+              <div><dt>目的</dt><dd>${escapeHtml(provider.purpose)}</dd></div>
+              <div><dt>送信先</dt><dd><code>${escapeHtml(provider.host)}</code></dd></div>
+              <div><dt>送信内容</dt><dd>${escapeHtml(sent)}</dd></div>
+            </dl>
+            <p><strong>地点名、診断回答、家族構成、備蓄情報は送りません。EpsilonLabはこの通信を受信・保存しません。</strong></p>
+          </div>
+          <div class="modal-actions">
+            <button class="button secondary" type="button" id="network-cancel">許可しない</button>
+            <button class="button secondary" type="button" id="network-once">今回だけ許可</button>
+            <button class="button" type="button" id="network-always">この端末で許可</button>
+          </div>
+        </section>
+      </div>`;
+    const close = (mode) => {
+      dialogRoot.innerHTML = '';
+      if (mode === 'once') sessionNetworkConsents.add(providerId);
+      if (mode === 'always') {
+        state.network.consents[providerId] = true;
+        persistDebounced();
+      }
+      resolve(Boolean(mode));
+    };
+    document.querySelector('#network-cancel')?.addEventListener('click', () => close(null));
+    document.querySelector('#network-once')?.addEventListener('click', () => close('once'));
+    document.querySelector('#network-always')?.addEventListener('click', () => close('always'));
+    document.querySelector('#network-cancel')?.focus();
+  });
+}
+
+function recordNetworkLog(providerId, purpose, sent, status) {
+  const provider = PUBLIC_DATA_PROVIDERS[providerId];
+  state.network.logs.unshift({
+    id: createId('network'),
+    at: new Date().toISOString(),
+    providerId,
+    providerName: provider?.name || providerId,
+    purpose,
+    sent,
+    status
+  });
+  state.network.logs = state.network.logs.slice(0, 100);
+}
+
+async function fetchLocationPublicData(providerId) {
+  const item = activeLocation();
+  if (!item) return;
+  if (!navigator.onLine) {
+    showToast('オフラインです。最後に取得した情報を確認してください。', 'error');
+    return;
+  }
+  let sent;
+  if (providerId === 'jma') sent = `気象庁地域コード ${item.jmaOfficeCode || '未設定'}`;
+  else sent = `緯度 ${Number(item.latitude).toFixed(5)}、経度 ${Number(item.longitude).toFixed(5)}`;
+  const allowed = await requestNetworkPermission(providerId, item, sent);
+  if (!allowed) return;
+  const provider = PUBLIC_DATA_PROVIDERS[providerId];
+  try {
+    main.setAttribute('aria-busy', 'true');
+    let result;
+    if (providerId === 'jshis') result = await fetchJshisHazard(item.latitude, item.longitude);
+    if (providerId === 'gsi') result = await fetchGsiPlaces(item.latitude, item.longitude, state.locations.selectedHazard);
+    if (providerId === 'jma') result = await fetchJmaWarnings(item.jmaOfficeCode);
+    item.publicData[providerId] = result;
+    recordNetworkLog(providerId, provider.purpose, sent, '取得成功');
+    await persistCurrentState();
+    render();
+    showToast('公的情報を更新しました。');
+  } catch (error) {
+    recordNetworkLog(providerId, provider.purpose, sent, `取得失敗: ${error.message || '不明なエラー'}`);
+    persistDebounced();
+    render();
+    showToast(error.message || '公的情報を取得できませんでした。', 'error');
+  } finally {
+    main.removeAttribute('aria-busy');
+  }
+}
+
+async function showLocationMap() {
+  const item = activeLocation();
+  if (!item) return;
+  const sent = `地図タイル番号の計算に使用する緯度 ${Number(item.latitude).toFixed(5)}、経度 ${Number(item.longitude).toFixed(5)}`;
+  const allowed = await requestNetworkPermission('gsi', item, sent);
+  if (!allowed) return;
+  visibleMapLocationId = item.id;
+  recordNetworkLog('gsi', '選択地点周辺の小さな地図を表示する', sent, '表示を開始');
+  persistDebounced();
+  render();
+}
+
+async function clearActiveLocationPublicData() {
+  const item = activeLocation();
+  if (!item) return;
+  const confirmed = await confirmDialog('取得済みの地域情報を削除しますか？', '地点そのものは残し、J-SHIS・国土地理院・気象庁から取得した結果だけを端末内から削除します。', '削除する');
+  if (!confirmed) return;
+  item.publicData = { jshis: null, gsi: null, jma: null };
+  visibleMapLocationId = null;
+  await persistCurrentState();
+  render();
+}
+
+function renderContacts() {
+  const categories = [...new Set(EMERGENCY_CONTACTS.map((item) => item.category))];
+  const custom = isLocked ? [] : state.contacts.custom;
+  const editing = custom.find((item) => item.id === editingCustomContactId) ?? null;
+  return `
+    <div class="page-container">
+      ${pageHeader('緊急連絡先', '災害・事故・急病で役立つ連絡先', '状況に合う番号を確認してから発信できます。命に危険があるときは、相談窓口を待たず緊急通報を優先してください。')}
+
+      <section class="notice danger">
+        <h2>緊急時の基本</h2>
+        <p><strong>火災・救急・消防による救助は119、事件・交通事故は110、海上の事件・事故は118です。</strong> 川・湖・池・用水路・プールなどで消防の救助が必要な場合は119へ通報します。</p>
+      </section>
+
+      ${categories.map((category) => `
+        <section class="section" aria-labelledby="contact-${escapeHtml(category)}">
+          <h2 id="contact-${escapeHtml(category)}">${escapeHtml(category)}</h2>
+          <div class="contact-grid">
+            ${EMERGENCY_CONTACTS.filter((item) => item.category === category).map(renderOfficialContactCard).join('')}
+          </div>
+        </section>`).join('')}
+
+      ${!isLocked && state.onboardingComplete ? `
+        <section class="card section">
+          <p class="eyebrow">この端末だけ</p>
+          <h2>${editing ? '登録した連絡先を編集' : '自分に必要な連絡先を追加'}</h2>
+          <p>自治体、水道、電力、ガス、管理会社、学校、かかりつけ医などを登録できます。保存方法に応じて端末内へ保存されます。</p>
+          <form id="custom-contact-form" novalidate>
+            <input type="hidden" name="id" value="${escapeHtml(editing?.id || '')}">
+            <div class="form-grid">
+              <div class="form-field"><label for="custom-contact-type">分類</label><select id="custom-contact-type" name="type">${CUSTOM_CONTACT_TYPES.map((type) => `<option value="${escapeHtml(type)}"${editing?.type === type ? ' selected' : ''}>${escapeHtml(type)}</option>`).join('')}</select></div>
+              <div class="form-field"><label for="custom-contact-name">名称</label><input id="custom-contact-name" name="name" type="text" maxlength="80" required value="${escapeHtml(editing?.name || '')}" placeholder="例: ○○市 防災窓口"></div>
+              <div class="form-field"><label for="custom-contact-number">電話番号</label><input id="custom-contact-number" name="number" type="tel" maxlength="40" required value="${escapeHtml(editing?.number || '')}" placeholder="例: 000-000-0000"></div>
+              <div class="form-field full"><label for="custom-contact-note">使う場面・受付時間など</label><textarea id="custom-contact-note" name="note" maxlength="300">${escapeHtml(editing?.note || '')}</textarea></div>
+            </div>
+            <div class="button-row"><button class="button" type="submit">${editing ? '変更を保存' : '連絡先を追加'}</button>${editing ? '<button class="button secondary" type="button" data-action="contact-cancel">編集をやめる</button>' : ''}</div>
+          </form>
+        </section>
+
+        <section class="card section">
+          <div class="section-heading"><div><p class="eyebrow">登録済み</p><h2>自分の連絡先</h2></div><span class="badge">${custom.length}件</span></div>
+          ${custom.length ? `<div class="contact-grid">${custom.map(renderCustomContactCard).join('')}</div>` : '<p>まだ登録がありません。</p>'}
+        </section>` : `
+        <section class="notice privacy section"><p>暗号化保存がロックされている間は、個人で登録した連絡先を表示しません。公的な連絡先はこのまま確認できます。</p></section>`}
+
+      <section class="notice warning section">
+        <h2>番号・受付時間は変わる場合があります</h2>
+        <p>#7119と#8000は、地域・時間帯によって利用条件が異なります。平常時に自治体の案内を確認し、地域固有の連絡先を登録しておくと安心です。</p>
+      </section>
+    </div>`;
+}
+
+function renderOfficialContactCard(item) {
+  return `
+    <article class="card contact-card${item.urgent ? ' emergency' : ''}">
+      <p class="eyebrow">${escapeHtml(item.category)}</p>
+      <h3>${escapeHtml(item.name)}</h3>
+      <p class="contact-number">${escapeHtml(item.number)}</p>
+      <p class="contact-use">${escapeHtml(item.summary)}</p>
+      ${item.cautions?.length ? `<ul class="contact-caution">${item.cautions.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>` : ''}
+      <div class="button-row"><button class="button${item.urgent ? ' danger' : ''} small" type="button" data-action="contact-call" data-contact-id="${escapeHtml(item.id)}">用途を確認して発信</button><a class="button subtle small" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">公式情報</a></div>
+    </article>`;
+}
+
+function renderCustomContactCard(item) {
+  return `
+    <article class="card contact-card">
+      <p class="eyebrow">${escapeHtml(item.type)}</p>
+      <h3>${escapeHtml(item.name)}</h3>
+      <p class="contact-number">${escapeHtml(item.number)}</p>
+      ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}
+      <div class="button-row"><button class="button small" type="button" data-action="contact-call" data-custom-id="${escapeHtml(item.id)}">確認して発信</button><button class="button secondary small" type="button" data-action="contact-edit" data-id="${escapeHtml(item.id)}">編集</button><button class="button danger small" type="button" data-action="contact-delete" data-id="${escapeHtml(item.id)}">削除</button></div>
+    </article>`;
+}
+
+function bindContacts() {
+  const form = document.querySelector('#custom-contact-form');
+  form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const data = new FormData(form);
+    const name = String(data.get('name') || '').trim();
+    const number = String(data.get('number') || '').trim();
+    if (!name || !number) {
+      showToast('名称と電話番号を入力してください。', 'error');
+      return;
+    }
+    const id = String(data.get('id') || '') || createId('contact');
+    const existing = state.contacts.custom.find((item) => item.id === id);
+    const next = {
+      id,
+      type: String(data.get('type') || 'その他'),
+      name,
+      number,
+      note: String(data.get('note') || '').trim(),
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    const index = state.contacts.custom.findIndex((item) => item.id === id);
+    if (index >= 0) state.contacts.custom[index] = next;
+    else state.contacts.custom.push(next);
+    editingCustomContactId = null;
+    await persistCurrentState();
+    render();
+  });
+}
+
+async function deleteCustomContact(id) {
+  const item = state.contacts.custom.find((entry) => entry.id === id);
+  if (!item) return;
+  const confirmed = await confirmDialog('連絡先を削除しますか？', `「${item.name}」をこの端末から削除します。`, '削除する');
+  if (!confirmed) return;
+  state.contacts.custom = state.contacts.custom.filter((entry) => entry.id !== id);
+  if (editingCustomContactId === id) editingCustomContactId = null;
+  await persistCurrentState();
+  render();
+}
+
+async function confirmPhoneCall(contactId, customId) {
+  const contact = contactId
+    ? EMERGENCY_CONTACTS.find((item) => item.id === contactId)
+    : state.contacts.custom.find((item) => item.id === customId);
+  if (!contact) return;
+  const number = contact.number;
+  return new Promise((resolve) => {
+    dialogRoot.innerHTML = `
+      <div class="modal-backdrop" role="presentation">
+        <section class="modal" role="dialog" aria-modal="true" aria-labelledby="phone-dialog-title">
+          <p class="eyebrow">発信前の確認</p>
+          <h2 id="phone-dialog-title">${escapeHtml(contact.name)}</h2>
+          <p class="contact-number">${escapeHtml(number)}</p>
+          <p>${escapeHtml(contact.summary || contact.note || '登録した連絡先へ発信します。')}</p>
+          ${contact.cautions?.length ? `<ul>${contact.cautions.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>` : ''}
+          <div class="modal-actions"><button class="button secondary" type="button" id="phone-cancel">戻る</button><a class="button${contact.urgent ? ' danger' : ''}" id="phone-call" href="tel:${escapeHtml(number.replace(/[^0-9+#*]/g, ''))}">${escapeHtml(number)}へ発信</a></div>
+        </section>
+      </div>`;
+    const close = () => { dialogRoot.innerHTML = ''; resolve(); };
+    document.querySelector('#phone-cancel')?.addEventListener('click', close);
+    document.querySelector('#phone-call')?.addEventListener('click', () => setTimeout(close, 100));
+    document.querySelector('#phone-cancel')?.focus();
+  });
+}
+
+function renderInstallAndUpdates() {
+  const standalone = window.matchMedia?.('(display-mode: standalone)').matches || Boolean(navigator.standalone);
+  const ua = navigator.userAgent;
+  const ios = /iPad|iPhone|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/i.test(ua);
+  const instructions = ios
+    ? ['Safariでこのページを開く。', '画面下または上の共有ボタンを押す。', '「ホーム画面に追加」を選び、「追加」を押す。']
+    : android
+      ? ['Chromeなどでこのページを開く。', 'この画面の「インストール」ボタン、またはブラウザメニューを開く。', '「アプリをインストール」または「ホーム画面に追加」を選ぶ。']
+      : ['ChromeまたはEdgeでこのページを開く。', 'アドレスバー付近のインストールアイコン、またはブラウザメニューを開く。', '「守れるいのちをインストール」を選ぶ。'];
+  return `
+    <div class="page-container">
+      ${pageHeader('インストールと更新', '端末へ追加して、通信がないときにも使う', 'ホーム画面からすぐ開けるようにし、防災ガイドや保存済み情報をオフラインでも確認できます。')}
+
+      <section class="grid two">
+        <article class="card">
+          <p class="eyebrow">現在の状態</p>
+          <h2>${standalone ? '端末へ追加されています' : 'ブラウザで開いています'}</h2>
+          <dl class="summary-list">
+            <div><dt>アプリ版</dt><dd>${APP_VERSION}</dd></div>
+            <div><dt>オフライン準備</dt><dd>${offlineStatus.cacheReady ? '準備済み' : '準備中または未対応'}</dd></div>
+            <div><dt>更新</dt><dd>${offlineStatus.updateAvailable ? '新しい版があります' : '確認済みの版を使用中'}</dd></div>
+            <div><dt>通信</dt><dd>${navigator.onLine ? 'オンライン' : 'オフライン'}</dd></div>
+          </dl>
+          <div class="button-row">
+            ${!standalone ? '<button class="button" type="button" data-action="install-pwa">インストール</button>' : ''}
+            <button class="button secondary" type="button" data-action="check-update">更新を確認</button>
+            ${offlineStatus.updateAvailable ? '<button class="button warning" type="button" data-action="apply-update">新しい版へ更新</button>' : ''}
+          </div>
+        </article>
+
+        <article class="card">
+          <p class="eyebrow">この端末での手順</p>
+          <h2>ホーム画面へ追加する</h2>
+          <ol class="install-steps">${instructions.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ol>
+          <p class="small-text">iPhone・iPadでは、Safariの共有メニューからの追加が最も分かりやすい方法です。ブラウザやOSの版によって表示名が少し異なります。</p>
+        </article>
+      </section>
+
+      <section class="card section">
+        <p class="eyebrow">更新のしくみ</p>
+        <h2>GitHub Pagesが更新された後</h2>
+        <ol class="install-steps">
+          <li>端末がオンラインの状態でアプリを開くと、起動時・オンライン復帰時・画面へ戻ったときに新しい版を確認します。</li>
+          <li>新しい版が見つかると、画面上部に小さな更新案内を表示します。診断や入力の途中で強制的に再読込しません。</li>
+          <li>「更新する」を押すと新しいService Workerへ切り替わり、画面を一度だけ再読込します。端末内の診断・備蓄データは別領域に保存されるため、通常は引き継がれます。</li>
+        </ol>
+        <div class="notice warning"><p>ブラウザのサイトデータを削除した場合や、保存領域がOSによって整理された場合はデータが失われることがあります。大切な内容は「データと設定」からバックアップしてください。</p></div>
+      </section>
+
+      <section class="card section">
+        <h2>オフライン動作を確かめる</h2>
+        <ol class="install-steps"><li>オンラインで一度アプリを開き、この画面で「オフライン準備: 準備済み」を確認します。</li><li>機内モードをオンにします。</li><li>アプリを閉じて開き直し、災害時ガイド、診断結果、備蓄情報を確認します。</li><li>確認後は機内モードを戻します。</li></ol>
+      </section>
+    </div>`;
+}
+
+
+function renderEmergencyContactButtons(contactIds = ['119', '110']) {
+  const contacts = contactIds.map((id) => EMERGENCY_CONTACTS.find((item) => item.id === id)).filter(Boolean);
+  return `<div class="phone-actions">${contacts.map((item) => `<button class="phone-link" type="button" data-action="contact-call" data-contact-id="${escapeHtml(item.id)}">${escapeHtml(item.number)} ${escapeHtml(item.name)}</button>`).join('')}</div>`;
+}
+
 function renderEmergencyOverview() {
   return `
     <div class="page-container">
@@ -1624,12 +2430,9 @@ function renderEmergencyOverview() {
 
       <section class="card emergency-intro">
         <h2>命に危険が迫っている場合</h2>
-        <p>まず目の前の危険から離れてください。火災・救急・救助は119、事件・事故は110へ通報します。電話が使えない場合は、周囲へ助けを求め、安全な場所へ移動してください。</p>
-        <div class="phone-actions">
-          <a class="phone-link" href="tel:119">119 火災・救急・救助</a>
-          <a class="phone-link" href="tel:110">110 事件・事故</a>
-          <a class="phone-link" href="tel:171">171 災害用伝言</a>
-        </div>
+        <p>まず目の前の危険から離れてください。火災・救急・消防による救助は119、事件・交通事故は110、海上の事件・事故は118へ通報します。川・湖・池・用水路・プールなどで消防の救助が必要な場合は119です。</p>
+        ${renderEmergencyContactButtons(['119', '110', '118'])}
+        <div class="button-row"><a class="button secondary" href="#/contacts">緊急連絡先をすべて見る</a></div>
       </section>
 
       <section class="section" aria-labelledby="emergency-types-title">
@@ -1649,7 +2452,7 @@ function renderEmergencyOverview() {
 
       <section class="notice warning section">
         <h2>このガイドの位置づけ</h2>
-        <p>一般的な行動を短くまとめたものです。現在地の危険、建物、けが、自治体の避難情報、消防・警察の指示を優先してください。このアプリは現在の警報を自動配信しません。</p>
+        <p>一般的な行動を短くまとめたものです。現在地の危険、建物、けが、自治体の避難情報、消防・警察の指示を優先してください。このアプリは警報を独自配信しません。地域情報で取得する場合も、発表時刻を確認し、自治体・気象庁などの公式情報を優先してください。</p>
       </section>
 
       <div class="button-row section no-print">
@@ -1668,10 +2471,7 @@ function renderEmergencyDetail(id) {
       <section class="card emergency-intro">
         <h2>最初に</h2>
         <p><strong>目の前の危険から離れ、自分の命を守ってください。</strong> 現在地の状況と公的機関の指示が、この一般ガイドより優先されます。</p>
-        <div class="phone-actions">
-          <a class="phone-link" href="tel:119">119 火災・救急・救助</a>
-          <a class="phone-link" href="tel:110">110 事件・事故</a>
-        </div>
+        ${renderEmergencyContactButtons(guide.contactIds?.slice(0, 4) || ['119', '110'])}
       </section>
 
       <section class="card section">
@@ -1691,6 +2491,14 @@ function renderEmergencyDetail(id) {
         <p class="eyebrow">安全を確保した後</p>
         <h2>次に確認する</h2>
         <ul class="plain-list">${guide.after.map((item) => `<li>${escapeHtml(item)}</li>`).join('')}</ul>
+      </section>
+
+      <section class="card section">
+        <p class="eyebrow">この状況で役立つ連絡先</p>
+        <h2>用途を確認して連絡する</h2>
+        ${renderEmergencyContactButtons(guide.contactIds || ['119', '110'])}
+        <p class="small-text">命に危険がある場合は、相談窓口の返答を待たず緊急通報を優先してください。</p>
+        <a class="button secondary small" href="#/contacts">連絡先の説明を詳しく見る</a>
       </section>
 
       <div class="button-row section no-print">
@@ -1747,7 +2555,7 @@ function renderPreparednessGuide() {
 
       <div class="notice warning section">
         <h2>現在の警報・避難情報について</h2>
-        <p>v0.1.0は、警報や近隣避難所を自動取得しません。災害時は自治体、気象庁、消防、警察、ライフライン事業者などの最新情報を確認してください。アプリの説明には内容確認日と出典を付けています。</p>
+        <p>地域情報は、利用者が通信内容を確認して許可したときだけ、公的機関から取得します。取得済み情報には時刻を表示しますが、災害時は自治体、気象庁、消防、警察、ライフライン事業者などの最新情報を優先してください。</p>
       </div>
 
       <div class="button-row section">
@@ -1774,7 +2582,7 @@ function renderHelp() {
       </section>
 
       <section class="section" aria-labelledby="install-title">
-        <div class="section-heading"><div><p class="eyebrow">スマートフォン・PC</p><h2 id="install-title">ホーム画面へ追加する</h2></div></div>
+        <div class="section-heading"><div><p class="eyebrow">スマートフォン・PC</p><h2 id="install-title">ホーム画面へ追加する</h2></div><a class="button small" href="#/install">端末別の詳しい手順</a></div>
         <div class="grid two">
           <div class="card">
             <h3>iPhone / iPad</h3>
@@ -1788,11 +2596,11 @@ function renderHelp() {
           <div class="card">
             <h3>Android / PC</h3>
             <ol class="action-list">
-              <li>ブラウザーのメニューまたはアドレス欄のインストール表示を選びます。</li>
+              <li>ブラウザのメニューまたはアドレス欄のインストール表示を選びます。</li>
               <li>「アプリをインストール」「ホーム画面に追加」などを選びます。</li>
               <li>追加後、一度開いてオフライン準備を確認します。</li>
             </ol>
-            ${deferredInstallPrompt ? '<button class="button small" type="button" data-action="install-pwa">この端末へインストール</button>' : '<p class="hint">インストールボタンが表示されない場合は、ブラウザーのメニューを確認してください。</p>'}
+            ${deferredInstallPrompt ? '<button class="button small" type="button" data-action="install-pwa">この端末へインストール</button>' : '<p class="hint">インストールボタンが表示されない場合は、ブラウザのメニューを確認してください。</p>'}
           </div>
         </div>
       </section>
@@ -1811,8 +2619,8 @@ function renderHelp() {
         <div class="section-heading"><div><p class="eyebrow">よくある質問</p><h2 id="faq-title">困ったとき</h2></div></div>
         <details><summary>診断の数字は、災害に遭う確率ですか？</summary><p>いいえ。公的な発生確率ではなく、入力内容から「備えを優先したい分野」を5段階で整理したアプリ独自の指標です。低い表示も安全を保証しません。</p></details>
         <details><summary>「わからない」が多くても使えますか？</summary><p>使えます。不明な回答を危険とも安全とも決めず、判定の確かさを下げ、「あとで確認すること」へ残します。</p></details>
-        <details><summary>データはGitHub Pagesへ保存されますか？</summary><p>保存されません。GitHub Pagesはアプリ本体を配信するだけです。入力内容は、選択した方法に応じて、この端末のブラウザー内だけで扱います。</p></details>
-        <details><summary>オフラインで何が使えますか？</summary><p>一度正常に読み込み、オフライン準備が完了すれば、診断、備蓄、家の安全、家族計画、災害時ガイドを利用できます。現在の警報や外部サイトは通信が必要です。</p></details>
+        <details><summary>データはGitHub Pagesへ保存されますか？</summary><p>保存されません。GitHub Pagesはアプリ本体を配信するだけです。入力内容は、選択した方法に応じて、この端末のブラウザ内だけで扱います。</p></details>
+        <details><summary>オフラインで何が使えますか？</summary><p>一度正常に読み込み、オフライン準備が完了すれば、診断、備蓄、家の安全、家族計画、災害時ガイドを利用できます。最後に取得した地域情報は確認できますが、最新の警報・避難先情報を更新するには通信が必要です。</p></details>
         <details><summary>端末を変えるにはどうしますか？</summary><p>「データと設定」からバックアップを書き出し、新しい端末で読み込みます。バックアップファイルには個人情報が含まれる場合があるため、安全に保管してください。</p></details>
         <details><summary>パスフレーズを忘れました</summary><p>アプリ開発者にも復元できません。保存データを削除してやり直す必要があります。重要な内容は暗号化バックアップや紙にも残してください。</p></details>
       </section>
@@ -1820,9 +2628,9 @@ function renderHelp() {
       <section class="notice warning section">
         <h2>アプリの限界</h2>
         <ul class="plain-list">
-          <li>現在の警報、避難指示、近隣避難所を自動配信しません。</li>
+          <li>警報や避難指示を独自に配信せず、取得した公的情報も完全性や即時性を保証しません。</li>
           <li>建物の安全性、医療上の必要量、個人の被害確率を判定しません。</li>
-          <li>端末故障、ブラウザーデータ消去、パスフレーズ忘れによる消失を防げません。</li>
+          <li>端末故障、ブラウザデータ消去、パスフレーズ忘れによる消失を防げません。</li>
           <li>緊急時は、現在地の状況、公的機関、消防・警察の指示を優先してください。</li>
         </ul>
       </section>
@@ -1865,6 +2673,7 @@ function renderOfflineIndicatorOnly() {
   if (dashboardCard) dashboardCard.innerHTML = renderOfflineCardContent();
   const helpCard = document.querySelector('#offline-help-card');
   if (helpCard) helpCard.innerHTML = renderOfflineCardContent(true);
+  renderUpdateBanner();
 }
 
 function renderSettings() {
@@ -1913,18 +2722,18 @@ function renderSettings() {
           <div class="grid two">
             ${storageOption('none', '保存しない', '変更後に端末内の保存データを削除します。現在の画面を閉じるまでは利用できます。', state.storageMode === 'none')}
             ${storageOption('result', '診断結果だけ保存', '診断回答、備蓄、家族計画は端末へ残しません。', state.storageMode === 'result')}
-            ${storageOption('full', 'この端末に保存', '入力内容をブラウザー内へ保存します。', state.storageMode === 'full')}
+            ${storageOption('full', 'この端末に保存', '入力内容をブラウザ内へ保存します。', state.storageMode === 'full')}
             ${storageOption('protected', '暗号化して保存', '8文字以上のパスフレーズで保存内容を保護します。', state.storageMode === 'protected')}
           </div>
           <div class="button-row"><button class="button" type="submit">保存方法を変更</button></div>
         </form>
-        <p class="hint">同じ端末・同じブラウザーを使う人は、暗号化していない保存内容を開ける場合があります。パスフレーズを忘れると、暗号化データは復元できません。</p>
+        <p class="hint">同じ端末・同じブラウザを使う人は、暗号化していない保存内容を開ける場合があります。パスフレーズを忘れると、暗号化データは復元できません。</p>
       </section>
 
       <section class="grid two section">
         <div class="card">
           <h2>バックアップ</h2>
-          <p>診断、備蓄、家の安全、家族計画をJSONファイルへ書き出します。端末変更やブラウザーデータ消去に備えられます。</p>
+          <p>診断、備蓄、家の安全、家族計画をJSONファイルへ書き出します。端末変更やブラウザデータ消去に備えられます。</p>
           <button class="button" type="button" data-action="export-backup">バックアップを書き出す</button>
           <p class="hint">暗号化保存を使っている場合、バックアップも暗号化します。それ以外のバックアップには個人情報が含まれる場合があります。</p>
         </div>
@@ -1943,7 +2752,7 @@ function renderSettings() {
         <div id="settings-offline-content">${renderOfflineCardContent(true)}</div>
         <hr class="divider">
         <h3>端末へ残りやすくする</h3>
-        <p>対応ブラウザーでは、保存領域を自動削除しにくくするよう要求できます。ブラウザーが必ず許可するとは限りません。</p>
+        <p>対応ブラウザでは、保存領域を自動削除しにくくするよう要求できます。ブラウザが必ず許可するとは限りません。</p>
         <button class="button secondary small" type="button" data-action="request-persistence">永続保存を要求する</button>
       </section>
 
@@ -2020,12 +2829,12 @@ async function updateStorageEstimate() {
   try {
     const estimate = await storageEstimate();
     if (!estimate) {
-      target.textContent = 'このブラウザーでは使用容量を取得できません。';
+      target.textContent = 'このブラウザでは使用容量を取得できません。';
       return;
     }
     const usageMb = estimate.usage / 1024 / 1024;
     const quotaMb = estimate.quota / 1024 / 1024;
-    target.textContent = `ブラウザー内の使用量: 約${formatNumber(usageMb, 2)}MB / 利用可能な上限の目安: 約${formatNumber(quotaMb, 0)}MB`;
+    target.textContent = `ブラウザ内の使用量: 約${formatNumber(usageMb, 2)}MB / 利用可能な上限の目安: 約${formatNumber(quotaMb, 0)}MB`;
   } catch {
     target.textContent = '使用容量を取得できませんでした。';
   }
@@ -2242,15 +3051,36 @@ function bindPage(route) {
   if (route.first === 'inventory') bindInventory();
   if (route.first === 'safety') bindHomeSafety();
   if (route.first === 'family') bindFamilyPlan();
+  if (route.first === 'locations') bindLocations();
+  if (route.first === 'contacts') bindContacts();
   if (route.first === 'settings') bindSettings();
+}
+
+function renderUpdateBanner() {
+  if (!updateBanner) return;
+  if (!offlineStatus.updateAvailable) {
+    updateBanner.hidden = true;
+    updateBanner.innerHTML = '';
+    return;
+  }
+  updateBanner.hidden = false;
+  updateBanner.innerHTML = `
+    <div class="app-update-inner">
+      <p><strong>新しい版を利用できます。</strong> 入力中の内容を確認してから更新してください。</p>
+      <div class="button-row">
+        <button class="button warning small" type="button" data-action="apply-update">更新する</button>
+        <button class="button subtle small" type="button" data-action="dismiss-update">後で</button>
+      </div>
+    </div>`;
 }
 
 async function registerServiceWorker() {
   if (!('serviceWorker' in navigator)) return;
   try {
-    serviceWorkerRegistration = await navigator.serviceWorker.register('./service-worker.js', { scope: './' });
+    serviceWorkerRegistration = await navigator.serviceWorker.register('./service-worker.js', { scope: './', updateViaCache: 'none' });
     offlineStatus.controlled = Boolean(navigator.serviceWorker.controller);
     offlineStatus.updateAvailable = Boolean(serviceWorkerRegistration.waiting);
+    renderUpdateBanner();
 
     serviceWorkerRegistration.addEventListener('updatefound', () => {
       const worker = serviceWorkerRegistration.installing;
@@ -2258,7 +3088,7 @@ async function registerServiceWorker() {
         if (worker.state === 'installed' && navigator.serviceWorker.controller) {
           offlineStatus.updateAvailable = true;
           renderOfflineIndicatorOnly();
-          showToast('新しいバージョンを利用できます。データと設定から適用できます。');
+          renderUpdateBanner();
         }
       });
     });
@@ -2286,26 +3116,42 @@ async function refreshOfflineStatus() {
     }
   }
   offlineStatus.updateAvailable = Boolean(serviceWorkerRegistration?.waiting);
+  renderUpdateBanner();
 }
 
-async function checkForUpdate() {
+function scheduleUpdateChecks() {
+  clearInterval(updateCheckTimer);
+  updateCheckTimer = window.setInterval(() => {
+    checkForUpdate({ quiet: true, minIntervalMs: 30 * 60_000 });
+  }, 30 * 60_000);
+  window.setTimeout(() => checkForUpdate({ quiet: true, minIntervalMs: 0 }), 4000);
+}
+
+async function checkForUpdate({ quiet = false, minIntervalMs = 0 } = {}) {
   if (!serviceWorkerRegistration) {
-    showToast('この環境では更新確認を利用できません。', 'error');
+    if (!quiet) showToast('この環境では更新確認を利用できません。', 'error');
     return;
   }
+  if (!navigator.onLine) {
+    if (!quiet) showToast('オフラインのため更新を確認できません。', 'error');
+    return;
+  }
+  const now = Date.now();
+  if (minIntervalMs && now - lastUpdateCheckAt < minIntervalMs) return;
+  lastUpdateCheckAt = now;
   try {
     await serviceWorkerRegistration.update();
     await refreshOfflineStatus();
     renderOfflineIndicatorOnly();
-    showToast(offlineStatus.updateAvailable ? '新しいバージョンがあります。' : '現在のバージョンは最新です。');
+    if (!quiet) showToast(offlineStatus.updateAvailable ? '新しい版があります。画面上部から更新できます。' : '現在の版は最新です。');
   } catch {
-    showToast('更新を確認できませんでした。通信状態を確認してください。', 'error');
+    if (!quiet) showToast('更新を確認できませんでした。通信状態を確認してください。', 'error');
   }
 }
 
 async function installPwa() {
   if (!deferredInstallPrompt) {
-    showToast('ブラウザーのメニューから「ホーム画面に追加」または「アプリをインストール」を選んでください。');
+    showToast('ブラウザのメニューから「ホーム画面に追加」または「アプリをインストール」を選んでください。');
     return;
   }
   deferredInstallPrompt.prompt();
@@ -2318,9 +3164,9 @@ async function handlePersistentStorageRequest() {
   try {
     const result = await requestPersistentStorage();
     if (!result.supported) {
-      showToast('このブラウザーは永続保存の要求に対応していません。');
+      showToast('このブラウザは永続保存の要求に対応していません。');
     } else if (result.persisted) {
-      showToast('ブラウザーが永続保存を許可しました。');
+      showToast('ブラウザが永続保存を許可しました。');
     } else {
       showToast('永続保存は許可されませんでした。定期的にバックアップしてください。');
     }

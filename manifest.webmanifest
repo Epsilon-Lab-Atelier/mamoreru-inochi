@@ -2,16 +2,24 @@
   "id": "./",
   "name": "守れるいのち - 暮らしの防災アプリ",
   "short_name": "守れるいのち",
-  "description": "生活環境のリスク診断、備蓄管理、災害時の行動ガイドを、無料・広告なし・オフライン対応で提供する防災PWAです。",
+  "description": "生活環境に合わせて、災害リスク・備蓄・緊急時の行動を確認できる無料の防災アプリです。",
   "lang": "ja",
   "dir": "ltr",
   "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "any",
-  "background_color": "#f6f8f7",
-  "theme_color": "#173f3a",
-  "categories": ["utilities", "education", "lifestyle"],
+  "background_color": "#f8f4ed",
+  "theme_color": "#355c4d",
+  "categories": [
+    "utilities",
+    "education",
+    "lifestyle"
+  ],
   "icons": [
     {
       "src": "./assets/icons/icon-192.png",
@@ -36,14 +44,38 @@
     {
       "name": "災害時の行動を見る",
       "short_name": "災害時",
+      "description": "災害別の行動ガイドをすぐに開きます。",
       "url": "./#/emergency",
-      "icons": [{"src": "./assets/icons/icon-192.png", "sizes": "192x192"}]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "緊急連絡先を見る",
+      "short_name": "連絡先",
+      "description": "119、110、118などの用途を確認します。",
+      "url": "./#/contacts",
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "備蓄を確認する",
       "short_name": "備蓄",
+      "description": "家族に必要な備蓄量を確認します。",
       "url": "./#/stockpile",
-      "icons": [{"src": "./assets/icons/icon-192.png", "sizes": "192x192"}]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

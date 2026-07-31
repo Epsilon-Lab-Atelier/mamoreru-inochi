@@ -492,7 +492,8 @@ export const EMERGENCY_GUIDES = [
       '避難する場合は、可能で安全なら電気器具を切り、ブレーカーを落とす。',
       'ガス臭がするときは、火気や電気スイッチを使わず、窓を開けて事業者へ連絡する。',
       '公的機関の情報を確認し、余震で倒れそうな物へ近づかない。'
-    ]
+    ],
+    contactIds: ['119', '110', '171', '9910']
   },
   {
     id: 'tsunami',
@@ -514,7 +515,8 @@ export const EMERGENCY_GUIDES = [
       '津波は繰り返し来るため、安全な場所にとどまる。',
       'ラジオや自治体など、信頼できる情報で解除を確認する。',
       '避難先で家族の連絡方法を使い、無理に迎えに行かない。'
-    ]
+    ],
+    contactIds: ['118', '119', '171']
   },
   {
     id: 'flood',
@@ -536,7 +538,8 @@ export const EMERGENCY_GUIDES = [
       '冠水した場所は、ふたの外れた側溝や感電の危険があるため避ける。',
       '自宅へ戻る前に、自治体の情報と建物周辺の安全を確認する。',
       '浸水した食品や電気設備を、自己判断ですぐ使用しない。'
-    ]
+    ],
+    contactIds: ['119', '110', '171', '9910']
   },
   {
     id: 'landslide',
@@ -557,7 +560,8 @@ export const EMERGENCY_GUIDES = [
       '斜面は再び崩れる可能性があるため、解除や安全確認まで近づかない。',
       '道路の土砂や倒木を自分だけで動かそうとしない。',
       '自治体・消防・警察の案内に従う。'
-    ]
+    ],
+    contactIds: ['119', '110', '9910']
   },
   {
     id: 'wind',
@@ -578,7 +582,8 @@ export const EMERGENCY_GUIDES = [
       '切れた電線、倒木、壊れた看板へ近づかない。',
       '屋外を確認するときは、風が十分弱まり安全情報を確認してから行う。',
       '停電復旧後の電気器具と、雨漏りした場所の電気設備に注意する。'
-    ]
+    ],
+    contactIds: ['119', '110', '171', '9910']
   },
   {
     id: 'fire',
@@ -600,7 +605,8 @@ export const EMERGENCY_GUIDES = [
       '安全な場所から、住所、燃えている場所、逃げ遅れの可能性を伝える。',
       '消防の許可なく建物へ戻らない。',
       'やけどや煙を吸った症状がある場合は、医療機関・救急へ相談する。'
-    ]
+    ],
+    contactIds: ['119', '110', '7119', 'poison-osaka', 'poison-tsukuba']
   },
   {
     id: 'power',
@@ -622,7 +628,8 @@ export const EMERGENCY_GUIDES = [
       '地域全体か自宅だけかを、安全な範囲で確認する。',
       '浸水・焦げ臭さ・破損がある電気器具は使用しない。',
       '停電情報と復旧見込みを、電力会社や自治体の公式情報で確認する。'
-    ]
+    ],
+    contactIds: ['119', '7119', '8000']
   },
   {
     id: 'water',
@@ -644,7 +651,8 @@ export const EMERGENCY_GUIDES = [
       '復旧直後は濁りや案内を確認し、自治体・水道事業者の指示に従う。',
       '使用した携帯トイレは、自治体の分別・回収方法に従う。',
       '不足した水、衛生用品、携帯トイレを補充する。'
-    ]
+    ],
+    contactIds: ['119']
   },
   {
     id: 'trapped',
@@ -666,8 +674,88 @@ export const EMERGENCY_GUIDES = [
       '救助者の声が聞こえたら、人数、けが、危険物の有無を伝える。',
       '孤立時は、水、薬、電池を計画的に使い、公式情報の受信を続ける。',
       '救助後は、症状が軽く見えても必要に応じて医療確認を受ける。'
-    ]
+    ],
+    contactIds: ['119', '110', '171']
   }
+];
+
+
+export const EMERGENCY_CONTACTS = [
+  {
+    id: '119', number: '119', name: '消防・救急・救助', category: '命に関わる緊急通報', urgent: true,
+    summary: '火災、急病、けが、閉じ込め、川・湖・池・プールなどでの救助が必要なとき。',
+    cautions: ['海上の事件・事故は118番です。', '通話できない場合は、公衆電話や周囲の人・店舗へ通報を依頼します。'],
+    guideIds: ['earthquake', 'fire', 'power', 'trapped', 'flood', 'landslide'],
+    sourceUrl: 'https://www.fdma.go.jp/mission/enrichment/kyukyumusen_kinkyutuhou/119.html'
+  },
+  {
+    id: '110', number: '110', name: '警察への緊急通報', category: '命に関わる緊急通報', urgent: true,
+    summary: '事件、交通事故、身の危険があり、警察官にすぐ来てほしいとき。',
+    cautions: ['緊急ではない相談は#9110または最寄りの警察署へ。'],
+    guideIds: ['earthquake', 'flood', 'landslide', 'wind'],
+    sourceUrl: 'https://www.npa.go.jp/bureau/safetylife/110ban/index.html'
+  },
+  {
+    id: '118', number: '118', name: '海上保安庁への緊急通報', category: '命に関わる緊急通報', urgent: true,
+    summary: '海での遭難、転落、船舶事故、油の流出、不審船など、海上の事件・事故。',
+    cautions: ['川、湖、池、用水路、プールなどで消防の救助が必要な場合は119番です。'],
+    guideIds: ['tsunami', 'flood'],
+    sourceUrl: 'https://www.kaiho.mlit.go.jp/info/kouhou/post-1274.html'
+  },
+  {
+    id: '7119', number: '#7119', name: '救急安心センター', category: '医療相談', urgent: false,
+    summary: '救急車を呼ぶか、今すぐ受診するか迷ったときに、医師・看護師等へ相談します。',
+    cautions: ['実施地域と受付時間が限られます。命に関わる症状は相談を待たず119番へ。'],
+    guideIds: ['power', 'fire'],
+    sourceUrl: 'https://www.fdma.go.jp/mission/enrichment/appropriate/appropriate007.html'
+  },
+  {
+    id: '8000', number: '#8000', name: '子ども医療電話相談', category: '医療相談', urgent: false,
+    summary: '休日・夜間の子どもの急な病気やけがで、受診や家庭での対応を相談したいとき。',
+    cautions: ['受付時間は都道府県によって異なります。重い症状や命の危険は119番へ。'],
+    guideIds: ['power', 'fire'],
+    sourceUrl: 'https://www.mhlw.go.jp/topics/2006/10/tp1010-3.html'
+  },
+  {
+    id: '9110', number: '#9110', name: '警察相談専用電話', category: '相談・通報', urgent: false,
+    summary: '犯罪被害、つきまとい、悪質商法、近隣トラブルなど、緊急ではない警察相談。',
+    cautions: ['事件・事故が今起きている場合は110番へ。'],
+    guideIds: [],
+    sourceUrl: 'https://www.npa.go.jp/bureau/safetylife/soudan/madoguchi.html'
+  },
+  {
+    id: '171', number: '171', name: '災害用伝言ダイヤル', category: '家族との連絡', urgent: false,
+    summary: '大規模災害で電話がつながりにくいとき、電話番号を手がかりに伝言を録音・再生します。',
+    cautions: ['災害時と体験利用日に提供されます。使い方を平常時に確認してください。'],
+    guideIds: ['earthquake', 'tsunami', 'flood', 'landslide', 'wind', 'trapped'],
+    sourceUrl: 'https://www.ntt-east.co.jp/saigai/voice171/'
+  },
+  {
+    id: '9910', number: '#9910', name: '道路緊急ダイヤル', category: '道路の異状', urgent: false,
+    summary: '道路の穴、路肩の崩壊、落下物、路面の汚れなど、道路の異状を通報します。',
+    cautions: ['24時間受付・無料です。交通事故や人命救助が必要な場合は110番・119番を優先します。'],
+    guideIds: ['earthquake', 'flood', 'landslide', 'wind'],
+    sourceUrl: 'https://www.mlit.go.jp/road/dia/index.html'
+  },
+  {
+    id: 'poison-osaka', number: '072-727-2499', name: '中毒110番（大阪）', category: '中毒相談', urgent: false,
+    summary: '化学物質、医薬品、家庭用品などを誤って飲んだ・吸った・触れた場合の応急手当相談。',
+    cautions: ['呼吸や意識に異常がある場合は119番へ。動物の中毒は対象外です。通話料がかかります。'],
+    guideIds: ['fire'],
+    sourceUrl: 'https://www.j-poison-ic.jp/110serviece/'
+  },
+  {
+    id: 'poison-tsukuba', number: '029-852-9999', name: '中毒110番（つくば）', category: '中毒相談', urgent: false,
+    summary: '化学物質、医薬品、家庭用品などを誤って飲んだ・吸った・触れた場合の応急手当相談。',
+    cautions: ['呼吸や意識に異常がある場合は119番へ。動物の中毒は対象外です。通話料がかかります。'],
+    guideIds: ['fire'],
+    sourceUrl: 'https://www.j-poison-ic.jp/110serviece/'
+  }
+];
+
+export const CUSTOM_CONTACT_TYPES = [
+  '家族・親族', '自治体の防災窓口', '水道', '電力', 'ガス', '管理会社・大家',
+  '学校・保育施設', '職場', 'かかりつけ医', '薬局', '動物病院', 'その他'
 ];
 
 export const PREPAREDNESS_ARTICLES = [
@@ -692,7 +780,7 @@ export const PREPAREDNESS_ARTICLES = [
       '安全な親族・知人宅、宿泊施設、指定された避難先へ早めに移動する方法があります。',
       '屋外移動が危険になった後は、丈夫な建物の高い階や斜面と反対側へ移る方が安全な場合があります。',
       '自宅が安全で生活を続けられる場合は、在宅避難も選択肢です。',
-      '指定緊急避難場所は危険から逃れる場所、指定避難所は被災後に生活する場所で、役割が異なります。'
+      '指定緊急避難場所は危険から逃れる場所、指定避難所は被災後に生活する場所です。指定福祉避難所は、支援が必要な人を対象に自治体が必要に応じて開設するため、役割と受入条件が異なります。'
     ]
   },
   {
@@ -815,7 +903,87 @@ export const OFFICIAL_SOURCES = [
     organization: '国土地理院',
     title: '指定緊急避難場所データ',
     url: 'https://www.gsi.go.jp/bousaichiri/hinanbasho.html',
-    usedFor: '災害種別ごとに指定される緊急避難場所と避難所の区別',
+    usedFor: '災害種別ごとに指定される緊急避難場所、指定避難所、指定福祉避難所の役割の区別',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'jshis-api',
+    organization: '防災科学技術研究所 J-SHIS',
+    title: '地震ハザード情報提供API',
+    url: 'https://www.j-shis.bosai.go.jp/api-pshm-meshinfo',
+    usedFor: '選択地点の今後30年間の地震動確率。API値は0から1の割合を百分率へ換算',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'gsi-tiles',
+    organization: '国土地理院',
+    title: '地理院タイル一覧',
+    url: 'https://maps.gsi.go.jp/development/ichiran.html',
+    usedFor: '指定緊急避難場所、指定避難所、指定福祉避難所、淡色地図のデータ仕様と利用上の注意',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'jma-warning',
+    organization: '気象庁',
+    title: '警報・注意報',
+    url: 'https://www.jma.go.jp/bosai/warning/',
+    usedFor: '選択地域の警報・注意報、発表時刻、見出しの確認',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'jma-2026-system',
+    organization: '気象庁',
+    title: '気象業務はいま 2026 特集1 新たな防災気象情報',
+    url: 'https://www.jma.go.jp/jma/kishou/books/hakusho/2026/index3.html',
+    usedFor: '2026年5月開始の新たな防災気象情報体系に関する注意',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'jcg-118',
+    organization: '海上保安庁',
+    title: '海の事件・事故は118番',
+    url: 'https://www.kaiho.mlit.go.jp/info/kouhou/post-1274.html',
+    usedFor: '海上の事件、事故、遭難に関する118番の案内',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'fdma-7119',
+    organization: '総務省消防庁',
+    title: '救急安心センター事業 #7119',
+    url: 'https://www.fdma.go.jp/mission/enrichment/appropriate/appropriate007.html',
+    usedFor: '救急車や受診の判断に迷う場合の相談窓口',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'mhlw-8000',
+    organization: '厚生労働省',
+    title: '子ども医療電話相談事業 #8000',
+    url: 'https://www.mhlw.go.jp/topics/2006/10/tp1010-3.html',
+    usedFor: '休日・夜間の子どもの病気やけがに関する電話相談',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'npa-9110',
+    organization: '警察庁',
+    title: '警察相談専用電話 #9110',
+    url: 'https://www.npa.go.jp/bureau/safetylife/soudan/madoguchi.html',
+    usedFor: '緊急ではない警察相談の案内',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'mlit-9910',
+    organization: '国土交通省',
+    title: '道路緊急ダイヤル #9910',
+    url: 'https://www.mlit.go.jp/road/dia/index.html',
+    usedFor: '道路の穴、崩壊、落下物などの道路異状の通報',
+    checkedAt: '2026-07-31'
+  },
+  {
+    id: 'poison-110',
+    organization: '公益財団法人 日本中毒情報センター',
+    title: '中毒110番・電話サービス',
+    url: 'https://www.j-poison-ic.jp/110serviece/',
+    usedFor: '医薬品、家庭用品、化学物質などの中毒相談',
     checkedAt: '2026-07-31'
   }
 ];

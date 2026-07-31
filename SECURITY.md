@@ -6,7 +6,8 @@
 
 | Version | Supported |
 |---|---|
-| 0.1.x | Yes |
+| 0.2.x | Yes |
+| 0.1.x | Security fixes only |
 
 ## 脆弱性の報告
 
@@ -17,7 +18,7 @@ GitHubのPrivate vulnerability reportingが有効な場合は、リポジトリ�
 ## 報告に含めてよい内容
 
 - アプリのバージョン
-- OSとブラウザー
+- OSとブラウザ
 - 個人情報を除いた再現手順
 - 影響の概要
 - 個人情報を含まない最小の検証コード

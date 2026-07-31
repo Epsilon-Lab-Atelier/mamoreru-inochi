@@ -8,7 +8,7 @@ body:
   - type: input
     id: environment
     attributes:
-      label: 端末・OS・ブラウザー・支援技術
+      label: 端末・OS・ブラウザ・支援技術
       placeholder: 例: iPhone / Safari / VoiceOver
     validations:
       required: true
