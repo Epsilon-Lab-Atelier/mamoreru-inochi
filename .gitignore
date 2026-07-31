@@ -1,0 +1,11 @@
+.DS_Store
+Thumbs.db
+*.log
+coverage/
+node_modules/
+.env
+.env.*
+!.env.example
+
+# Package-only owner documents (never publish)
+/LOCAL_ONLY/

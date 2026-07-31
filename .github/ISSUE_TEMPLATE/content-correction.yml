@@ -1,0 +1,25 @@
+name: 防災内容・出典の修正提案
+about: 古い情報、誤解を招く表現、リンク切れを報告します
+body:
+  - type: markdown
+    attributes:
+      value: |
+        公的機関の一次資料がある場合は、資料名とURLを示してください。
+        個人の住所、被災経験の詳細、医療情報は書かないでください。
+  - type: input
+    id: page
+    attributes:
+      label: 対象の画面・項目
+    validations:
+      required: true
+  - type: textarea
+    id: issue
+    attributes:
+      label: 修正が必要と思う理由
+    validations:
+      required: true
+  - type: input
+    id: source
+    attributes:
+      label: 根拠となる公的資料
+      placeholder: 組織名、資料名、URL

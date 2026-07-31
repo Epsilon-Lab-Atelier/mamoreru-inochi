@@ -1,0 +1,24 @@
+name: アクセシビリティ改善提案
+about: 読み上げ、キーボード、文字拡大、見え方の問題を報告します
+body:
+  - type: markdown
+    attributes:
+      value: |
+        個人情報を含めず、利用した支援技術と操作手順をお知らせください。
+  - type: input
+    id: environment
+    attributes:
+      label: 端末・OS・ブラウザー・支援技術
+      placeholder: 例: iPhone / Safari / VoiceOver
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: 操作しにくい点
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: 改善案（任意）

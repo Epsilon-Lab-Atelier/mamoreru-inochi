@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://epsilon-lab-atelier.github.io/mamoreru-inochi/sitemap.xml
