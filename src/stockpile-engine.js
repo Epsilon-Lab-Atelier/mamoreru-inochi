@@ -1,6 +1,22 @@
 import { STOCKPILE_FIELDS } from './data.js';
 import { daysUntil, toNonNegativeInteger, toNonNegativeNumber } from './utils.js';
 
+export const STOCKPILE_SCENARIOS = Object.freeze([
+  { id: 'standard-3', label: 'まず3日分', description: '最低限の3日分を確認します。', days: { waterDays: 3, foodDays: 3, powerDays: 3, gasDays: 3, isolationDays: 3, elevatorDays: 3 } },
+  { id: 'comfort-7', label: '安心7日分', description: '広域災害や物流停止も考え、7日分を確認します。', days: { waterDays: 7, foodDays: 7, powerDays: 5, gasDays: 7, isolationDays: 7, elevatorDays: 7 } },
+  { id: 'high-rise', label: '高層住宅・エレベータ停止', description: '水とトイレを重視し、階段移動も考えます。', days: { waterDays: 7, foodDays: 7, powerDays: 5, gasDays: 7, isolationDays: 7, elevatorDays: 7 } },
+  { id: 'infant', label: '乳幼児がいる', description: 'ミルク、おむつ、衛生用品を長めに確保します。', days: { waterDays: 7, foodDays: 7, powerDays: 5, gasDays: 7, isolationDays: 10, elevatorDays: 5 } },
+  { id: 'medical-power', label: '医療機器に電源が必要', description: '電源確保と早めの相談・避難計画を優先します。', days: { waterDays: 7, foodDays: 7, powerDays: 7, gasDays: 7, isolationDays: 7, elevatorDays: 7 } },
+  { id: 'flood-evacuation', label: '浸水前に避難する', description: '持出袋と上階・避難先へ運べる量を重視します。', days: { waterDays: 3, foodDays: 3, powerDays: 3, gasDays: 3, isolationDays: 3, elevatorDays: 3 } },
+  { id: 'winter-blackout', label: '冬の停電', description: '電源、防寒、加熱手段を長めに想定します。', days: { waterDays: 7, foodDays: 7, powerDays: 7, gasDays: 7, isolationDays: 7, elevatorDays: 7 } },
+  { id: 'summer-blackout', label: '夏の停電', description: '飲料水、充電、暑さ対策を長めに想定します。', days: { waterDays: 7, foodDays: 7, powerDays: 7, gasDays: 5, isolationDays: 7, elevatorDays: 7 } },
+  { id: 'isolation', label: '道路寸断・孤立', description: '物流が止まる期間を長めに想定します。', days: { waterDays: 10, foodDays: 10, powerDays: 7, gasDays: 10, isolationDays: 10, elevatorDays: 7 } }
+]);
+
+export function stockpileScenario(id) {
+  return STOCKPILE_SCENARIOS.find((item) => item.id === id) || STOCKPILE_SCENARIOS[1];
+}
+
 export function createDefaultHousehold() {
   return {
     adults: 1,
@@ -21,6 +37,7 @@ export function createDefaultStockpile() {
     quantities: Object.fromEntries(STOCKPILE_FIELDS.map((field) => [field.id, 0])),
     advanced: {
       enabled: false,
+      scenarioId: 'comfort-7',
       waterDays: 7,
       foodDays: 7,
       powerDays: 3,
@@ -31,6 +48,21 @@ export function createDefaultStockpile() {
     inventory: [],
     result: null,
     lastCheckedAt: null
+  };
+}
+
+
+export function applyStockpileScenario(stockpileInput = {}, scenarioId = 'comfort-7') {
+  const scenario = stockpileScenario(scenarioId);
+  return {
+    ...stockpileInput,
+    advanced: {
+      ...createDefaultStockpile().advanced,
+      ...(stockpileInput.advanced || {}),
+      enabled: true,
+      scenarioId: scenario.id,
+      ...scenario.days
+    }
   };
 }
 
@@ -115,6 +147,7 @@ export function calculateStockpile(householdInput = {}, stockpileInput = {}) {
     ...createDefaultStockpile().advanced,
     ...(stockpileInput.advanced ?? {})
   };
+  const scenario = stockpileScenario(advanced.scenarioId);
   const minimumTargets = practicalTargets(people, household, 3);
   const comfortTargets = practicalTargets(people, household, 7);
 
@@ -194,6 +227,10 @@ export function calculateStockpile(householdInput = {}, stockpileInput = {}) {
   if (advanced.enabled && !advancedMet) {
     comments.push('アドバンス設定の日数に対して不足があります。設定値は生活環境に合わせ、保管スペースや持ち運びも考えて調整してください。');
   }
+  const waterItem = items.find((item) => item.id === 'waterLiters');
+  const waterWeightKg = waterItem ? Math.round((advanced.enabled ? waterItem.advancedTarget : waterItem.comfort) * 10) / 10 : 0;
+  if (waterWeightKg >= 20) comments.push(`目標の飲料水は約${waterWeightKg}kgです。一か所へ集めすぎず、浸水しにくく取り出せる場所へ分散保管してください。`);
+  if (advanced.enabled && scenario.id === 'flood-evacuation') comments.push('避難時に全備蓄を持ち出すことはできません。持出袋と在宅用備蓄を分け、防水して保管してください。');
 
   return {
     generatedAt: new Date().toISOString(),
@@ -201,6 +238,8 @@ export function calculateStockpile(householdInput = {}, stockpileInput = {}) {
     people,
     quantities,
     advanced,
+    scenario,
+    waterWeightKg,
     minimumDays: 3,
     comfortDays: 7,
     items,

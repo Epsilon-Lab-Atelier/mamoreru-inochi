@@ -86,3 +86,15 @@ test('inventory analysis groups expired and near-expiry items', () => {
   assert.equal(result.noDate.length, 1);
   assert.equal(result.items[0].name, 'expired');
 });
+
+test('advanced presets apply scenario days and report water weight', async () => {
+  const { applyStockpileScenario, stockpileScenario } = await import('../src/stockpile-engine.js');
+  const household = { ...createDefaultHousehold(), adults: 2 };
+  const stockpile = applyStockpileScenario(createDefaultStockpile(), 'isolation');
+  const result = calculateStockpile(household, stockpile);
+  assert.equal(stockpile.advanced.enabled, true);
+  assert.equal(stockpile.advanced.waterDays, 10);
+  assert.equal(result.scenario.id, 'isolation');
+  assert.equal(result.waterWeightKg, 60);
+  assert.match(stockpileScenario('high-rise').description, /階段/);
+});

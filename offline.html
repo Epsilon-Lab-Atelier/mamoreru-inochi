@@ -3,19 +3,26 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#173f3a">
+  <meta name="theme-color" content="#355c4d">
   <title>オフライン | 守れるいのち</title>
   <style>
-    body{font-family:system-ui,-apple-system,"Hiragino Sans","Yu Gothic UI",sans-serif;margin:0;background:#f6f8f7;color:#17201f;line-height:1.75}main{max-width:42rem;margin:10vh auto;padding:2rem}.card{background:#fff;border:1px solid #cad6d3;border-radius:1rem;padding:1.5rem;box-shadow:0 8px 28px rgba(20,45,42,.08)}a{display:inline-block;margin-top:1rem;padding:.8rem 1rem;border-radius:.65rem;background:#173f3a;color:#fff;text-decoration:none;font-weight:700}
+    :root{color-scheme:light;font-size:16px}*{box-sizing:border-box}body{margin:0;background:#f8f4ed;color:#26302c;font-family:system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Sans","Yu Gothic UI","Yu Gothic",Meiryo,sans-serif;line-height:1.75;overflow-wrap:anywhere}main{width:min(calc(100% - 1.5rem),42rem);margin:8vh auto;padding-bottom:2rem}.card{border:1px solid #d8cbbd;border-radius:1.25rem;background:#fffdf9;padding:clamp(1.2rem,4vw,2rem);box-shadow:0 12px 34px rgba(83,67,48,.10)}h1{margin-top:0;line-height:1.3;color:#355c4d}.notice{margin-top:1rem;border-left:.35rem solid #c97852;border-radius:.65rem;background:#f7e4d9;padding:.85rem 1rem}.actions{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.3rem}a{display:inline-flex;min-height:3rem;align-items:center;justify-content:center;padding:.7rem 1rem;border:2px solid transparent;border-radius:.72rem;background:#355c4d;color:#fff;text-decoration:none;font-weight:800;text-align:center}a.secondary{border-color:#355c4d;background:transparent;color:#355c4d}@media(max-width:420px){.actions a{width:100%}}
   </style>
 </head>
 <body>
   <main>
     <section class="card">
       <h1>通信につながっていません</h1>
-      <p>一度アプリを開いてオフライン準備が完了していれば、主要な診断・備蓄・災害時ガイドを利用できます。</p>
-      <p>前の画面へ戻るか、アプリをもう一度開いてください。</p>
-      <a href="./#/emergency">災害時の行動を見る</a>
+      <p>「守れるいのち」をオンラインで一度開き、オフライン準備が完了していれば、診断、備蓄、家族計画、防災訓練、緊急連絡先、災害時ガイドなどを利用できます。</p>
+      <div class="notice">
+        <strong>現在の警報、公的情報の更新、住所検索、未保存の地図には通信が必要です。</strong>
+        <p>取得済みの情報を見るときは、取得日時を確認してください。</p>
+      </div>
+      <div class="actions">
+        <a href="./#/emergency">災害時の行動を見る</a>
+        <a class="secondary" href="./#/contacts">緊急連絡先を見る</a>
+        <a class="secondary" href="./">アプリをもう一度開く</a>
+      </div>
     </section>
   </main>
 </body>

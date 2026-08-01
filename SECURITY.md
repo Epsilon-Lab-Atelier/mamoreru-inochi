@@ -6,8 +6,9 @@
 
 | Version | Supported |
 |---|---|
-| 0.2.x | Yes |
-| 0.1.x | Security fixes only |
+| 0.3.x | Yes |
+| 0.2.x | Security fixes only |
+| 0.1.x | No |
 
 ## 脆弱性の報告
 

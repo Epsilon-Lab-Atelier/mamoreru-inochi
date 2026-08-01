@@ -97,3 +97,41 @@ test('GSI map URL contains the selected point', () => {
   assert.match(url, /maps\.gsi\.go\.jp/);
   assert.match(url, /35\.681236\/139\.767125/);
 });
+
+test('GSI address search candidates and reverse geocode payloads are normalized', async () => {
+  const {
+    parseGsiAddressSearchPayload,
+    parseGsiReverseGeocodePayload,
+    searchGsiAddress
+  } = await import('../src/public-data.js');
+  const candidates = parseGsiAddressSearchPayload([
+    { geometry: { coordinates: [139.767, 35.681] }, properties: { title: '東京駅' } },
+    { geometry: { coordinates: ['bad', 35] }, properties: { title: '除外' } }
+  ]);
+  assert.equal(candidates.length, 1);
+  assert.equal(candidates[0].title, '東京駅');
+  const reverse = parseGsiReverseGeocodePayload({ results: { muniCd: '13101', lv01Nm: '丸の内一丁目' } });
+  assert.equal(reverse.address, '13101 丸の内一丁目');
+
+  let requested = '';
+  const result = await searchGsiAddress('東京駅', {
+    fetchImpl: async (url) => {
+      requested = String(url);
+      return { ok: true, json: async () => [{ geometry: { coordinates: [139.767, 35.681] }, properties: { title: '東京駅' } }] };
+    }
+  });
+  assert.match(requested, /msearch\.gsi\.go\.jp/);
+  assert.equal(result.candidates.length, 1);
+});
+
+test('offline map tile helper only allows declared official hosts', async () => {
+  const { fetchMapTile } = await import('../src/public-data.js');
+  let options;
+  const response = await fetchMapTile('https://cyberjapandata.gsi.go.jp/xyz/pale/1/1/1.png', {
+    fetchImpl: async (_url, init) => { options = init; return { ok: true }; }
+  });
+  assert.equal(response.ok, true);
+  assert.equal(options.mode, 'no-cors');
+  assert.equal(options.credentials, 'omit');
+  await assert.rejects(() => fetchMapTile('https://example.com/tile.png'), /許可されていない/);
+});

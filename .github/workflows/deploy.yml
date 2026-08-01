@@ -30,7 +30,7 @@ jobs:
         run: |
           mkdir -p _site
           cp index.html offline.html manifest.webmanifest service-worker.js version.json robots.txt sitemap.xml .nojekyll _site/
-          cp -R assets src _site/
+          cp -R assets src vendor _site/
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload Pages artifact

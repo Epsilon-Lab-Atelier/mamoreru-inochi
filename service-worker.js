@@ -1,7 +1,14 @@
-const VERSION = '0.2.0';
-const STATIC_CACHE = `mamoreru-inochi-static-${VERSION}`;
-const RUNTIME_CACHE = `mamoreru-inochi-runtime-${VERSION}`;
+const VERSION = '0.3.0';
+const CACHE_REVISION = 'privacy-hotfix-1';
+const STATIC_CACHE = `mamoreru-inochi-static-${VERSION}-${CACHE_REVISION}`;
+const RUNTIME_CACHE = `mamoreru-inochi-runtime-${VERSION}-${CACHE_REVISION}`;
+const MAP_CACHE = `mamoreru-inochi-map-${VERSION}`;
 const SCOPE_URL = new URL(self.registration.scope);
+const MAP_HOSTS = new Set([
+  'cyberjapandata.gsi.go.jp',
+  'disaportaldata.gsi.go.jp',
+  'www.j-shis.bosai.go.jp'
+]);
 
 const scoped = (path) => new URL(path, SCOPE_URL).toString();
 
@@ -17,9 +24,15 @@ const APP_SHELL = [
   './assets/icons/icon-512.png',
   './assets/icons/maskable-512.png',
   './assets/icons/apple-touch-icon.png',
+  './assets/screenshots/home-mobile.png',
+  './assets/screenshots/family-wide.png',
+  './vendor/qrcode.js',
   './src/app.js',
   './src/data.js',
   './src/public-data.js',
+  './src/share.js',
+  './src/map.js',
+  './src/drills.js',
   './src/risk-engine.js',
   './src/stockpile-engine.js',
   './src/storage.js',
@@ -36,7 +49,7 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((keys) => Promise.all(
         keys
-          .filter((key) => key.startsWith('mamoreru-inochi-') && ![STATIC_CACHE, RUNTIME_CACHE].includes(key))
+          .filter((key) => key.startsWith('mamoreru-inochi-') && ![STATIC_CACHE, RUNTIME_CACHE, MAP_CACHE].includes(key))
           .map((key) => caches.delete(key))
       ))
       .then(() => self.clients.claim())
@@ -48,7 +61,12 @@ self.addEventListener('fetch', (event) => {
   if (request.method !== 'GET') return;
 
   const url = new URL(request.url);
-  // 公的データへの通信はアプリ画面で個別に許可を得るため、Service Workerでは横取りしない。
+  if (MAP_HOSTS.has(url.hostname)) {
+    event.respondWith(caches.match(request).then((cached) => cached || fetch(request)));
+    return;
+  }
+
+  // 公的なJSON情報への通信は、アプリ画面で個別に許可を得てから直接行う。
   if (url.origin !== self.location.origin) return;
 
   if (request.mode === 'navigate') {

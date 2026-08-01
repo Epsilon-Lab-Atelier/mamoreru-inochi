@@ -13,11 +13,35 @@ export const PUBLIC_DATA_PROVIDERS = Object.freeze({
     host: 'cyberjapandata.gsi.go.jp',
     purpose: '選択地点の近くにある指定緊急避難場所・指定避難所・指定福祉避難所を確認する'
   },
+  map: {
+    id: 'map',
+    name: '国土地理院の地図',
+    host: 'cyberjapandata.gsi.go.jp',
+    purpose: '地点の選択と周辺地図の表示に地図タイルを使う'
+  },
   jma: {
     id: 'jma',
     name: '気象庁',
     host: 'www.jma.go.jp',
     purpose: '選択した地域の現在の警報・注意報を確認する'
+  },
+  geocode: {
+    id: 'geocode',
+    name: '国土地理院の住所検索',
+    host: 'msearch.gsi.go.jp',
+    purpose: '入力した住所・施設名から地点候補を探す'
+  },
+  reverseGeocode: {
+    id: 'reverseGeocode',
+    name: '国土地理院の住所確認',
+    host: 'mreversegeocoder.gsi.go.jp',
+    purpose: '地図上で選んだ地点のおおよその住所を確認する'
+  },
+  hazardMap: {
+    id: 'hazardMap',
+    name: 'ハザードマップポータルサイト',
+    host: 'disaportaldata.gsi.go.jp',
+    purpose: '選択地点周辺の災害種別ごとの地図を表示する'
   }
 });
 
@@ -104,6 +128,24 @@ export async function fetchJsonWithTimeout(url, { timeoutMs = 12000, signal, fet
     clearTimeout(timeout);
     signal?.removeEventListener?.('abort', relayAbort);
   }
+}
+
+
+export async function fetchMapTile(url, { fetchImpl = fetch } = {}) {
+  const target = new URL(String(url));
+  const allowedHosts = new Set([
+    'cyberjapandata.gsi.go.jp',
+    'disaportaldata.gsi.go.jp',
+    'www.j-shis.bosai.go.jp'
+  ]);
+  if (!allowedHosts.has(target.hostname)) throw new Error('許可されていない地図提供元です。');
+  return fetchImpl(target.toString(), {
+    method: 'GET',
+    mode: 'no-cors',
+    cache: 'no-store',
+    credentials: 'omit',
+    referrerPolicy: 'no-referrer'
+  });
 }
 
 export function buildJshisUrl(latitude, longitude) {
@@ -348,4 +390,55 @@ export function formatProbability(value) {
   // J-SHISの超過確率は0から1の割合で返るため、百分率へ換算します。
   const percentage = Number(value) * 100;
   return `${new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 2 }).format(percentage)}%`;
+}
+
+
+export function parseGsiAddressSearchPayload(payload) {
+  const list = Array.isArray(payload) ? payload : [];
+  return list.flatMap((item, index) => {
+    const coordinates = item?.geometry?.coordinates;
+    if (!Array.isArray(coordinates) || coordinates.length < 2) return [];
+    const longitude = Number(coordinates[0]);
+    const latitude = Number(coordinates[1]);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return [];
+    const title = String(item?.properties?.title || item?.properties?.address || `候補${index + 1}`);
+    return [{ id: `address-${index}-${latitude.toFixed(6)}-${longitude.toFixed(6)}`, title, latitude, longitude }];
+  }).slice(0, 12);
+}
+
+export async function searchGsiAddress(query, options = {}) {
+  const normalized = String(query || '').trim();
+  if (normalized.length < 2) throw new Error('住所または施設名を2文字以上入力してください。');
+  const url = new URL('https://msearch.gsi.go.jp/address-search/AddressSearch');
+  url.searchParams.set('q', normalized);
+  const payload = await fetchJsonWithTimeout(url.toString(), options);
+  return {
+    provider: 'geocode',
+    query: normalized,
+    fetchedAt: new Date().toISOString(),
+    sourceUrl: url.toString(),
+    candidates: parseGsiAddressSearchPayload(payload)
+  };
+}
+
+export function parseGsiReverseGeocodePayload(payload) {
+  const results = payload?.results ?? payload ?? {};
+  const municipality = String(results.muniCd || results.municipality || '');
+  const local = String(results.lv01Nm || results.localName || '');
+  const address = [municipality, local].filter(Boolean).join(' ');
+  return { municipality, local, address };
+}
+
+export async function reverseGeocodeGsi(latitude, longitude, options = {}) {
+  const point = normalizeCoordinates(latitude, longitude);
+  const url = new URL('https://mreversegeocoder.gsi.go.jp/reverse-geocoder/LonLatToAddress');
+  url.searchParams.set('lat', String(point.latitude));
+  url.searchParams.set('lon', String(point.longitude));
+  const payload = await fetchJsonWithTimeout(url.toString(), options);
+  return {
+    provider: 'reverseGeocode',
+    fetchedAt: new Date().toISOString(),
+    sourceUrl: url.toString(),
+    ...parseGsiReverseGeocodePayload(payload)
+  };
 }

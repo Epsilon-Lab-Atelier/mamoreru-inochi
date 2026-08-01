@@ -417,6 +417,15 @@ export const INVENTORY_CATEGORIES = [
   'その他'
 ];
 
+export const INVENTORY_STORAGE_LOCATIONS = [
+  '自宅',
+  '非常持出袋',
+  '職場・学校',
+  '車',
+  '実家・別宅',
+  'その他'
+];
+
 export const HOME_SAFETY_GROUPS = [
   {
     id: 'bedroom',
@@ -680,6 +689,64 @@ export const EMERGENCY_GUIDES = [
 ];
 
 
+export const EMERGENCY_GUIDE_EASY_TEXT = Object.freeze({
+  earthquake: {
+    summary: '頭を守ります。揺れが止まってから、火事、出口、津波を確認します。',
+    immediate: ['机の下などで、頭と体を守ります。', '棚、窓、照明から離れます。すぐ外へ飛び出しません。', '揺れている間は、無理に火を消しません。', '海や川の近くで強い揺れがあったら、すぐ高い場所へ逃げます。'],
+    avoid: ['エレベーターを使いません。', '割れた物がある床を、はだしで歩きません。', '安全が分からないまま、電気やガスを触りません。'],
+    after: ['けが、火事、出口を確認します。', '避難するときは、安全にできる場合だけ電気やガスを止めます。', 'ガスのにおいがするときは、火と電気のスイッチを使いません。', '公的な情報を確認し、倒れそうな物へ近づきません。']
+  },
+  tsunami: {
+    summary: '海や川から離れます。すぐ、できるだけ高い場所へ逃げます。',
+    immediate: ['強い揺れや長い揺れがあったら、海や川からすぐ離れます。', '高台や、津波に対応した避難場所へ行きます。', '家族や荷物を待たず、まず自分が逃げます。', '地域の計画に従い、できるだけ徒歩で逃げます。'],
+    avoid: ['海や川を見に行きません。', '波が引いても戻りません。', '警報が終わるまで低い場所へ戻りません。'],
+    after: ['津波は何度も来ることがあります。安全な場所にいます。', '自治体や気象庁の情報で、警報が終わったことを確認します。', '家族には伝言サービスなどで連絡し、危ない場所へ迎えに行きません。']
+  },
+  flood: {
+    summary: '暗くなる前、雨や風が強くなる前に、危ない場所から離れます。',
+    immediate: ['自治体や気象庁の情報を見て、早めに逃げます。', '川、用水路、海、地下道、地下室へ近づきません。', '外へ出ることが危ないときは、丈夫な建物の高い場所へ移ります。', '助けが必要な人は、ほかの人より早く動きます。'],
+    avoid: ['水の中を歩いたり、車で入ったりしません。', '川や側溝を見に行きません。', '地下や低い道路へ行きません。'],
+    after: ['水がたまった場所へ入りません。穴や電気の危険があります。', '家へ戻る前に、自治体の情報と建物の安全を確認します。', '水につかった食べ物や電気製品を、すぐ使いません。']
+  },
+  landslide: {
+    summary: '雨が強くなる前に、崖や斜面から離れます。',
+    immediate: ['崖や斜面の近くでは、早めに安全な場所へ逃げます。', '外へ出ることが危ないときは、建物の上の階で、崖と反対側へ移ります。', '地面の音、湧き水、小石などの異変があれば、すぐ離れて知らせます。'],
+    avoid: ['崖、沢、谷、山の道へ近づきません。', '雨が弱くなっても、すぐ戻りません。', '写真を撮るために斜面へ近づきません。'],
+    after: ['崖はまた崩れることがあります。安全が確認されるまで近づきません。', '土や倒れた木を一人で動かしません。', '自治体、消防、警察の案内に従います。']
+  },
+  wind: {
+    summary: '風が強くなる前に家の中へ入り、窓から離れます。',
+    immediate: ['外へ出ず、窓から離れた場所にいます。', 'ライト、充電、ラジオ、暑さ・寒さへの準備を手元へ置きます。', '避難が必要なら、風と雨が強くなる前に移動します。'],
+    avoid: ['風が強くなってから、屋根やベランダを直しません。', '窓の近くにいません。', '増えた川や海へ近づきません。'],
+    after: ['切れた電線、倒れた木、壊れた看板へ近づきません。', '風が弱くなり、安全を確認してから外へ出ます。', '電気が戻った後も、ぬれた電気製品に注意します。']
+  },
+  fire: {
+    summary: '周りへ知らせて119番。煙を避けて、すぐ逃げます。',
+    immediate: ['大きな声やベルで周りへ知らせ、119番へ電話します。', '安全に消せる小さな火だけ消します。危ないときはすぐ逃げます。', '低い姿勢で煙を避けます。', '建物へ戻らず、取り残された人のことを消防へ伝えます。'],
+    avoid: ['煙が多い場所へ戻りません。', 'エレベーターを使いません。', '物を取りに建物へ戻りません。'],
+    after: ['安全な場所から、住所、火の場所、人が残っているかを伝えます。', '消防がよいと言うまで建物へ戻りません。', 'やけどや煙を吸った症状があれば、救急へ相談します。']
+  },
+  power: {
+    summary: '火事と一酸化炭素中毒を防ぎ、明かり、連絡、暑さ・寒さへ備えます。',
+    immediate: ['懐中電灯やランタンを使います。ろうそくはできるだけ使いません。', '電気が戻ったときの火事を防ぐため、熱を出す電気製品を確認します。', '医療機器が必要で危ないときは119番へ相談します。', '暑すぎる、寒すぎる前に安全な場所へ移ります。'],
+    avoid: ['発電機、炭、練炭を家、車庫、テントの中で使いません。', 'ガスのにおい、水ぬれがある場所で電気のスイッチを触りません。', '冷蔵庫を何度も開けません。'],
+    after: ['近所も停電しているか、安全な範囲で確認します。', 'ぬれた物、焦げたにおいがする物、壊れた電気製品を使いません。', '電力会社や自治体の公式情報を確認します。']
+  },
+  water: {
+    summary: '飲む水を大切に使います。安全が分かるまでトイレを流さないことがあります。',
+    immediate: ['飲む水、料理の水、衛生の水を分け、計画して使います。', '下水の安全が分からないときは、水洗トイレを流さず携帯トイレを使います。', '自治体の給水場所、容器、時間を確認します。', '手洗い、歯みがき、食べ物の衛生を優先します。'],
+    avoid: ['安全が分かる前に、多くの水を排水しません。', '飲めるか分からない水を飲みません。', '重い水を一人で無理に運びません。'],
+    after: ['水が戻った後も、濁りと水道の案内を確認します。', '使った携帯トイレは、自治体の捨て方に従います。', '使った水、衛生用品、携帯トイレを補充します。']
+  },
+  trapped: {
+    summary: '呼吸を守ります。音、光、電話で自分の場所を知らせ、体力を残します。',
+    immediate: ['けが、火事、ガスのにおいを確認し、無理に動きません。', '電話が使えれば119番や家族へ、場所と状況を短く伝えます。', '笛、物をたたく音、ライトで、休みながら場所を知らせます。', 'ほこりがあるときは、布で口と鼻をおおいます。'],
+    avoid: ['火を使いません。', '大声を出し続けません。', '不安定な物や扉を無理に動かしません。'],
+    after: ['救助する人へ、人数、けが、危ない物を伝えます。', '孤立したときは、水、薬、電池を計画して使います。', '救助された後も、必要なら医療機関で確認します。']
+  }
+});
+
+
 export const EMERGENCY_CONTACTS = [
   {
     id: '119', number: '119', name: '消防・救急・救助', category: '命に関わる緊急通報', urgent: true,
@@ -714,14 +781,14 @@ export const EMERGENCY_CONTACTS = [
     summary: '休日・夜間の子どもの急な病気やけがで、受診や家庭での対応を相談したいとき。',
     cautions: ['受付時間は都道府県によって異なります。重い症状や命の危険は119番へ。'],
     guideIds: ['power', 'fire'],
-    sourceUrl: 'https://www.mhlw.go.jp/topics/2006/10/tp1010-3.html'
+    sourceUrl: 'https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/newpage_55223.html'
   },
   {
     id: '9110', number: '#9110', name: '警察相談専用電話', category: '相談・通報', urgent: false,
     summary: '犯罪被害、つきまとい、悪質商法、近隣トラブルなど、緊急ではない警察相談。',
     cautions: ['事件・事故が今起きている場合は110番へ。'],
     guideIds: [],
-    sourceUrl: 'https://www.npa.go.jp/bureau/safetylife/soudan/madoguchi.html'
+    sourceUrl: 'https://www.npa.go.jp/goiken_notes.html'
   },
   {
     id: '171', number: '171', name: '災害用伝言ダイヤル', category: '家族との連絡', urgent: false,
@@ -752,6 +819,20 @@ export const EMERGENCY_CONTACTS = [
     sourceUrl: 'https://www.j-poison-ic.jp/110serviece/'
   }
 ];
+
+export const EMERGENCY_CONTACT_EASY_TEXT = Object.freeze({
+  '119': { summary: '火事、急な病気、大きなけが、閉じ込めなどで、消防や救急の助けがすぐ必要なとき。', cautions: ['海の事故は118番です。', '電話できないときは、近くの人や店へ助けを求めます。'] },
+  '110': { summary: '事件や交通事故が今起きていて、警察にすぐ来てほしいとき。', cautions: ['急がない相談は#9110か近くの警察署です。'] },
+  '118': { summary: '海での事故、遭難、船の事故などで、海上保安庁の助けが必要なとき。', cautions: ['川、湖、池、プールなどで消防の救助が必要なときは119番です。'] },
+  '7119': { summary: '救急車を呼ぶか、すぐ病院へ行くか迷うときに相談します。', cautions: ['使える地域と時間が決まっています。命が危ないときは119番です。'] },
+  '8000': { summary: '夜や休みの日に、子どもの病気やけがを相談します。', cautions: ['使える時間は地域で違います。命が危ないときは119番です。'] },
+  '9110': { summary: '急がない警察への相談です。犯罪被害、つきまとい、悪質商法などを相談します。', cautions: ['事件や事故が今起きているときは110番です。'] },
+  '171': { summary: '大きな災害で電話がつながりにくいとき、家族へ声の伝言を残します。', cautions: ['災害時と体験できる日に使えます。平常時に使い方を確認します。'] },
+  '9910': { summary: '道路の穴、崩れ、落ちている物など、道路の危険を知らせます。', cautions: ['事故や人の救助が必要なときは110番・119番を先に使います。'] },
+  'poison-osaka': { summary: '薬、洗剤、化学物質などを飲んだ、吸った、触ったときの相談です。', cautions: ['呼吸や意識に異常があるときは119番です。'] },
+  'poison-tsukuba': { summary: '薬、洗剤、化学物質などを飲んだ、吸った、触ったときの相談です。', cautions: ['呼吸や意識に異常があるときは119番です。'] }
+});
+
 
 export const CUSTOM_CONTACT_TYPES = [
   '家族・親族', '自治体の防災窓口', '水道', '電力', 'ガス', '管理会社・大家',
@@ -840,7 +921,7 @@ export const OFFICIAL_SOURCES = [
     title: 'できることから始めよう！防災対策 第3回 備蓄品を備える',
     url: 'https://www.bousai.go.jp/kohou/kouhoubousai/h28/83/special_03.html',
     usedFor: '飲料水1人1日3L、食料最低3日分、できれば1週間分という備蓄の基本目安',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'cabinet-toilet',
@@ -848,7 +929,7 @@ export const OFFICIAL_SOURCES = [
     title: '災害時のトイレ、備えていますか？',
     url: 'https://www.bousai.go.jp/kohou/kouhoubousai/r06/111/news_08.html',
     usedFor: '携帯トイレ1人1日5回、1週間35回分という備蓄目安',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'jma-earthquake',
@@ -856,7 +937,7 @@ export const OFFICIAL_SOURCES = [
     title: '地震から身を守るために',
     url: 'https://www.jma.go.jp/jma/kishou/know/jishin/jishin_bosai/index.html',
     usedFor: '地震時の安全確保と、津波からの避難に関する行動ガイド',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'jma-rain',
@@ -864,7 +945,7 @@ export const OFFICIAL_SOURCES = [
     title: '大雨・台風では、どのような災害が起こるのか',
     url: 'https://www.jma.go.jp/jma/kishou/know/ame_chuui/ame_chuui_p10.html',
     usedFor: '大雨、洪水、土砂災害、暴風時の行動ガイド',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'fdma-119',
@@ -872,7 +953,7 @@ export const OFFICIAL_SOURCES = [
     title: '119番緊急通報',
     url: 'https://www.fdma.go.jp/mission/enrichment/appropriate/appropriate007.html',
     usedFor: '火災・救急・救助を求める119番の案内',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'npa-110',
@@ -880,7 +961,7 @@ export const OFFICIAL_SOURCES = [
     title: '110番の適切な利用',
     url: 'https://www.npa.go.jp/bureau/safetylife/110ban/index.html',
     usedFor: '事件・事故など緊急時の110番の案内',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'ntt-171',
@@ -888,7 +969,7 @@ export const OFFICIAL_SOURCES = [
     title: '災害用伝言ダイヤル（171）',
     url: 'https://www.ntt-east.co.jp/saigai/voice171/',
     usedFor: '電話がつながりにくい災害時の伝言サービス',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'mlit-seismic',
@@ -896,7 +977,7 @@ export const OFFICIAL_SOURCES = [
     title: '住宅・建築物の耐震化について',
     url: 'https://www.mlit.go.jp/jutakukentiku/house/jutakukentiku_house_fr_000043.html',
     usedFor: '1981年以前の旧耐震基準と住宅の耐震確認に関する案内',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'gsi-shelter',
@@ -904,7 +985,7 @@ export const OFFICIAL_SOURCES = [
     title: '指定緊急避難場所データ',
     url: 'https://www.gsi.go.jp/bousaichiri/hinanbasho.html',
     usedFor: '災害種別ごとに指定される緊急避難場所、指定避難所、指定福祉避難所の役割の区別',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'jshis-api',
@@ -912,7 +993,7 @@ export const OFFICIAL_SOURCES = [
     title: '地震ハザード情報提供API',
     url: 'https://www.j-shis.bosai.go.jp/api-pshm-meshinfo',
     usedFor: '選択地点の今後30年間の地震動確率。API値は0から1の割合を百分率へ換算',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'gsi-tiles',
@@ -920,7 +1001,7 @@ export const OFFICIAL_SOURCES = [
     title: '地理院タイル一覧',
     url: 'https://maps.gsi.go.jp/development/ichiran.html',
     usedFor: '指定緊急避難場所、指定避難所、指定福祉避難所、淡色地図のデータ仕様と利用上の注意',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'jma-warning',
@@ -928,7 +1009,7 @@ export const OFFICIAL_SOURCES = [
     title: '警報・注意報',
     url: 'https://www.jma.go.jp/bosai/warning/',
     usedFor: '選択地域の警報・注意報、発表時刻、見出しの確認',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'jma-2026-system',
@@ -936,7 +1017,7 @@ export const OFFICIAL_SOURCES = [
     title: '気象業務はいま 2026 特集1 新たな防災気象情報',
     url: 'https://www.jma.go.jp/jma/kishou/books/hakusho/2026/index3.html',
     usedFor: '2026年5月開始の新たな防災気象情報体系に関する注意',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'jcg-118',
@@ -944,7 +1025,7 @@ export const OFFICIAL_SOURCES = [
     title: '海の事件・事故は118番',
     url: 'https://www.kaiho.mlit.go.jp/info/kouhou/post-1274.html',
     usedFor: '海上の事件、事故、遭難に関する118番の案内',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'fdma-7119',
@@ -952,23 +1033,23 @@ export const OFFICIAL_SOURCES = [
     title: '救急安心センター事業 #7119',
     url: 'https://www.fdma.go.jp/mission/enrichment/appropriate/appropriate007.html',
     usedFor: '救急車や受診の判断に迷う場合の相談窓口',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'mhlw-8000',
     organization: '厚生労働省',
     title: '子ども医療電話相談事業 #8000',
-    url: 'https://www.mhlw.go.jp/topics/2006/10/tp1010-3.html',
+    url: 'https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/newpage_55223.html',
     usedFor: '休日・夜間の子どもの病気やけがに関する電話相談',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'npa-9110',
     organization: '警察庁',
     title: '警察相談専用電話 #9110',
-    url: 'https://www.npa.go.jp/bureau/safetylife/soudan/madoguchi.html',
+    url: 'https://www.npa.go.jp/goiken_notes.html',
     usedFor: '緊急ではない警察相談の案内',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'mlit-9910',
@@ -976,7 +1057,7 @@ export const OFFICIAL_SOURCES = [
     title: '道路緊急ダイヤル #9910',
     url: 'https://www.mlit.go.jp/road/dia/index.html',
     usedFor: '道路の穴、崩壊、落下物などの道路異状の通報',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   },
   {
     id: 'poison-110',
@@ -984,6 +1065,6 @@ export const OFFICIAL_SOURCES = [
     title: '中毒110番・電話サービス',
     url: 'https://www.j-poison-ic.jp/110serviece/',
     usedFor: '医薬品、家庭用品、化学物質などの中毒相談',
-    checkedAt: '2026-07-31'
+    checkedAt: '2026-08-01'
   }
 ];

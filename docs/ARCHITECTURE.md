@@ -2,9 +2,9 @@
 
 ## 目的
 
-「守れるいのち」v0.2.0は、GitHub Pagesで公開する静的PWAです。診断、備蓄、家の安全、家族計画、緊急連絡先を端末内で扱い、災害時の主要コンテンツをオフラインで利用できることを優先します。
+「守れるいのち」v0.3.0は、GitHub Pagesで公開する静的PWAです。スマホへインストールし、診断、備蓄、家の安全、家族計画、防災訓練、緊急連絡先を端末内で扱い、災害時の主要コンテンツをオフラインで利用できることを優先します。
 
-地域情報だけは、利用者が内容を確認して許可した場合に限り、公的機関へ直接問い合わせます。
+地域情報と地図だけは、利用者が送信先、内容、目的を確認して許可した場合に、公的機関へ直接問い合わせます。
 
 ## 実行構成
 
@@ -13,13 +13,15 @@ GitHub Pages
   └─ HTML / CSS / JavaScript / icons / manifest / Service Worker
           ↓ 初回読込
 利用者のブラウザ
-  ├─ Cache Storage: アプリ本体と防災コンテンツ
+  ├─ Cache Storage: アプリ本体、防災コンテンツ、明示保存した周辺地図
   ├─ IndexedDB: 選択された保存データ
   ├─ Web Crypto API: パスフレーズ保護
   ├─ Geolocation API: 利用者が許可した場合の地点入力
+  ├─ QR生成: 端末内のローカルJavaScript
   └─ 公的機関への直接通信: 利用者が個別に許可した場合だけ
        ├─ J-SHIS
        ├─ 国土地理院
+       ├─ ハザードマップポータル
        └─ 気象庁
 ```
 
@@ -27,55 +29,31 @@ EpsilonLabのバックエンド、アカウント、クラウド同期、広告�
 
 ## モジュール
 
-- `src/app.js`
-  - Hash Router
-  - 画面描画とフォーム処理
-  - 文字サイズと表示設定
-  - 地域情報、通信確認、通信履歴
-  - 緊急連絡先
-  - PWAインストールと更新
-  - バックアップ・設定UI
-- `src/data.js`
-  - 診断質問
-  - 災害分野
-  - 備蓄項目
-  - 災害時ガイド
-  - 緊急連絡先
-  - 公的出典
-- `src/public-data.js`
-  - J-SHIS API
-  - 国土地理院GeoJSONタイル
-  - 気象庁警報JSON
-  - 座標、タイル、距離、応答解析
-- `src/risk-engine.js`
-  - 決定論的な診断計算
-- `src/stockpile-engine.js`
-  - 3日・7日・任意日数の必要量
-  - 必須項目のゲート判定
-  - 賞味期限分析
-- `src/storage.js`
-  - IndexedDB
-  - 保存モード
-  - バックアップ
-  - 永続ストレージ要求
-- `src/crypto.js`
-  - PBKDF2-SHA-256
-  - AES-GCM
-- `service-worker.js`
-  - アプリシェルの事前キャッシュ
-  - 同一オリジンの静的ファイルキャッシュ
-  - オフライン時のナビゲーションフォールバック
-  - 利用者操作による新Service Workerへの切り替え
+- `src/app.js`: Hash Router、画面描画、フォーム、インストール、更新、設定
+- `src/data.js`: 診断質問、災害時ガイド、備蓄項目、緊急連絡先、出典
+- `src/public-data.js`: J-SHIS、国土地理院、住所検索、気象庁、公的通信
+- `src/map.js`: Web Mercator計算、地図タイル、災害レイヤ、マーカー
+- `src/share.js`: 家族計画の選択共有、URL・ファイル形式、取込
+- `src/drills.js`: 防災訓練、進行、記録、カレンダー書き出し
+- `src/risk-engine.js`: 決定論的なリスク診断
+- `src/stockpile-engine.js`: 3日・7日・状況別備蓄、期限分析
+- `src/storage.js`: IndexedDB、保存モード、バックアップ、移行
+- `src/crypto.js`: PBKDF2-SHA-256、AES-GCM
+- `vendor/qrcode.js`: MIT LicenseのQR Code Generator
+- `service-worker.js`: アプリシェル、更新、オフライン、明示保存地図
 
 ## ルーティング
 
-Hash Routerを使い、GitHub Pagesでサーバ側リライトを必要としません。
+GitHub Pagesでサーバ側リライトを必要としないHash Routerを使います。
 
 主な例:
 
 - `#/`
 - `#/diagnosis/area`
 - `#/stockpile/items`
+- `#/family/share`
+- `#/family/import`
+- `#/drills/run`
 - `#/locations`
 - `#/contacts`
 - `#/emergency/earthquake`
@@ -86,53 +64,63 @@ Hash Routerを使い、GitHub Pagesでサーバ側リライトを必要としま
 保存する主な要素:
 
 - `preferences`
+- `install`
 - `diagnosis`
 - `household`
 - `stockpile`
 - `homeSafety`
 - `familyPlan`
+- `drills`
 - `locations`
 - `network.consents`
 - `network.logs`
-- `contacts.custom`
+- `contacts`
 - `audit`
 
-v0.2.0は`schemaVersion: 2`です。v0.1.0の保存内容は、既定値を補う形で読み込みます。
+v0.3.0は`schemaVersion: 3`です。v0.2.0以前の保存内容を読み込み、メモリ上で既定値を補完し、整合性を確認してから新形式で保存します。
 
 ## 外部通信の境界
 
-アプリ本体から任意の送信先へ通信できないよう、Content Security Policyの`connect-src`を次へ限定します。
+Content Security Policyで、実行コード、画像、通信先を同一オリジンと承認済みの公的提供元へ限定します。
 
-- 同一オリジン
 - `www.j-shis.bosai.go.jp`
 - `cyberjapandata.gsi.go.jp`
+- `disaportaldata.gsi.go.jp`
+- `msearch.gsi.go.jp`
+- `mreversegeocoder.gsi.go.jp`
 - `www.jma.go.jp`
 
-地図画像も国土地理院に限定します。外部通信は`src/public-data.js`に集約し、広告、解析、WebSocket、送信ビーコンは使用しません。
+動的な`fetch`は`src/public-data.js`へ集約します。広告、解析、WebSocket、送信ビーコンは使用しません。
+
+## 地図
+
+外部地図ライブラリを使わず、Web Mercatorのタイル計算を`src/map.js`で行います。標準表示時は地図タイルを自動で永続保存しません。
+
+利用者が「周辺地図をオフライン用に保存」を選んだ場合だけ、登録地点、災害レイヤ、縮尺の限られたタイルを専用Cache Storageへ保存します。
+
+## 家族共有
+
+家族計画は、選択項目だけをJSONへ変換し、Base64URL形式で共有リンクへ格納できます。QRコードはその共有リンクを端末内で描画します。受信時は内容を表示し、利用者が取り込みを選ぶまで保存しません。
 
 ## オフライン更新
 
-Service Workerのキャッシュ名にアプリバージョンを含めます。
-
 1. 新しいWorkerを検出してinstallする
-2. 既存ページを強制再読込せず、waiting状態で待つ
+2. 既存ページを強制再読込せずwaiting状態で待つ
 3. 画面上部に更新案内を表示する
 4. 利用者が「更新する」を押す
-5. `SKIP_WAITING`メッセージで新Workerへ切り替える
+5. `SKIP_WAITING`で新Workerへ切り替える
 6. `controllerchange`後に一度だけ再読込する
 
-起動時、オンライン復帰時、画面復帰時、一定時間ごと、手動操作時に`registration.update()`を実行します。
+起動時、オンライン復帰時、画面復帰時、一定時間ごと、手動操作時に更新を確認します。
 
 ## GitHub Pagesの公開物
 
-GitHub Actionsはテスト後、実行に必要な次のファイルだけを`_site`へコピーします。
+GitHub Actionsは自動テスト後、実行に必要な次だけを`_site`へコピーします。
 
-- HTML
-- manifest
-- Service Worker
-- `version.json`
-- robots / sitemap / `.nojekyll`
+- HTML、manifest、Service Worker、`version.json`
+- robots、sitemap、`.nojekyll`
 - `assets/`
 - `src/`
+- `vendor/`
 
-`LOCAL_ONLY/`、テスト、管理文書はPagesへ含めません。
+`LOCAL_ONLY/`、テスト、管理者向け文書はPagesへ含めません。
