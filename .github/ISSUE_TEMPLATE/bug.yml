@@ -6,12 +6,12 @@ body:
       value: |
         ご報告ありがとうございます。
 
-        **住所、氏名、病名、薬名、家族構成、正確な位置情報、パスフレーズ、実際のバックアップファイルは書かないでください。**
+        **住所、氏名、勤務先、職業、病名、薬名、家族構成、正確な位置情報、パスフレーズ、実際のバックアップファイルは書かないでください。**
   - type: input
     id: version
     attributes:
       label: アプリのバージョン
-      placeholder: 例: 0.3.0
+      placeholder: 例: 0.3.1
     validations:
       required: true
   - type: dropdown

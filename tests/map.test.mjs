@@ -1,14 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  DEFAULT_MAP_VIEW,
   HAZARD_MAP_LAYERS,
   buildMapTiles,
   clampZoom,
   markerPosition,
   moveMapCenter,
+  moveMapCenterByPixels,
   pointFromViewport,
   urlsForMap
 } from '../src/map.js';
+
+
+test('default map view starts over Japan and pixel dragging changes the center', () => {
+  assert.ok(DEFAULT_MAP_VIEW.latitude >= 20 && DEFAULT_MAP_VIEW.latitude <= 46);
+  assert.ok(DEFAULT_MAP_VIEW.longitude >= 122 && DEFAULT_MAP_VIEW.longitude <= 154);
+  assert.notEqual(DEFAULT_MAP_VIEW.latitude, 0);
+  assert.notEqual(DEFAULT_MAP_VIEW.longitude, 0);
+  const shifted = moveMapCenterByPixels(DEFAULT_MAP_VIEW, 128, 0);
+  assert.ok(shifted.longitude < DEFAULT_MAP_VIEW.longitude);
+});
 
 test('map tile layout is bounded and uses public official tile hosts', () => {
   const center = { latitude: 35.681236, longitude: 139.767125, zoom: 14 };

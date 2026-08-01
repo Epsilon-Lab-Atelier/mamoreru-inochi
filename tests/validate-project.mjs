@@ -10,7 +10,7 @@ const expectedRepository = 'mamoreru-inochi';
 const expectedRepositoryUrl = `https://github.com/${expectedOwner}/${expectedRepository}`;
 const expectedPagesUrl = 'https://epsilon-lab-atelier.github.io/mamoreru-inochi/';
 const expectedDescription = '生活環境に合わせて、災害リスク・備蓄・緊急時の行動を確認できる無料の防災アプリです。';
-const expectedManifestDescription = 'スマホに入れて、災害リスク・備蓄・家族計画・緊急時の行動をいつでも確認できる無料の防災アプリです。';
+const expectedManifestDescription = 'スマホに入れて、災害リスク・備蓄・家族の防災計画・緊急時の行動をいつでも確認できる無料の防災アプリです。';
 
 const required = [
   '.github/ISSUE_TEMPLATE/accessibility.yml',
@@ -32,7 +32,7 @@ const required = [
   'tests/crypto.test.mjs', 'tests/public-data.test.mjs', 'tests/risk-engine.test.mjs',
   'tests/static-validation.test.mjs', 'tests/stockpile-engine.test.mjs',
   'tests/share.test.mjs', 'tests/map.test.mjs', 'tests/drills.test.mjs',
-  'tests/check-links.mjs',
+  'tests/check-links.mjs', 'tests/privacy-scan.test.mjs',
   'README.md', 'CHANGELOG.md', 'CONTRIBUTING.md', 'LICENSE', 'SECURITY.md',
   'THIRD_PARTY_NOTICES.md',
   'docs/ACCESSIBILITY.md', 'docs/ARCHITECTURE.md', 'docs/DATA_SOURCES.md',
@@ -78,7 +78,7 @@ if (/<link[^>]+rel=["']stylesheet["'][^>]+href=["']https?:/i.test(index)
   || /<link[^>]+href=["']https?:[^>]+rel=["']stylesheet["']/i.test(index)) errors.push('Remote stylesheets are not allowed.');
 if (!index.includes('<script src="./vendor/qrcode.js"></script>')) errors.push('Local QR library is not loaded before the application module.');
 if (!index.includes(`content="${expectedDescription}"`)) errors.push('Short public description is missing.');
-if (!index.includes(`og:image" content="${expectedPagesUrl}assets/og-image.png?v=0.3.0`)) errors.push('Absolute v0.3.0 OGP image URL is missing.');
+if (!index.includes(`og:image" content="${expectedPagesUrl}assets/og-image.png?v=0.3.1`)) errors.push('Absolute v0.3.1 OGP image URL is missing.');
 if (!index.includes('og:image:width" content="1200"') || !index.includes('og:image:height" content="630"')) errors.push('OGP image dimensions must be declared as 1200x630.');
 const ogDimensions = pngDimensions('assets/og-image.png');
 if (!ogDimensions || ogDimensions.width !== 1200 || ogDimensions.height !== 630) errors.push('assets/og-image.png must be a valid 1200x630 PNG.');
@@ -130,7 +130,7 @@ for (const screenshot of manifest.screenshots ?? []) {
 const readme = read('README.md');
 if (/git\s+push|git\s+init|git\s+config|gh\s+repo\s+create|Fine-grained|PAT|公開手順|運用者向け/i.test(readme)) errors.push('README must not contain owner push, authentication, or deployment procedures.');
 if (!readme.includes(expectedPagesUrl)) errors.push('README must contain the correct GitHub Pages URL.');
-for (const term of ['スマホに入れる', '家族計画', 'QR', '防災訓練', 'やさしい日本語', '防災地図']) if (!readme.includes(term)) errors.push(`README must describe v0.3.0 feature: ${term}`);
+for (const term of ['スマホに入れる', '家族の防災計画', 'QR', '防災訓練', 'やさしい日本語', '防災地図']) if (!readme.includes(term)) errors.push(`README must describe current feature: ${term}`);
 
 const gitignore = read('.gitignore');
 if (!/^\/LOCAL_ONLY\/$/m.test(gitignore)) errors.push('.gitignore must exclude /LOCAL_ONLY/.');
@@ -169,6 +169,11 @@ if (!index.includes('id="font-size-panel"') || !index.includes('文字サイズ:
 if (/文字サイズを[^。\n]{0,30}変更しました/.test(app)) errors.push('Obstructive font-size change toast must not be used.');
 if (!app.includes('serviceWorkerRegistration.update()') || !app.includes('offlineStatus.updateAvailable')) errors.push('PWA update checking is incomplete.');
 if (!app.includes('まだ電話はかかっていません') || !app.includes('電話アプリを開く')) errors.push('Emergency call confirmation wording is missing.');
+if (!app.includes('発信前に確認する') || app.includes('>用途を確認する<')) errors.push('Emergency contact action label is not clear.');
+if (!app.includes('家族の防災計画') || !index.includes('家族の防災計画') || !JSON.stringify(manifest).includes('家族の防災計画')) errors.push('Family disaster plan label is inconsistent.');
+if (/searchParams\.set\(['"]attr['"]/.test(publicData)) errors.push('J-SHIS request must omit attr so all required attributes are returned in one request.');
+if (!read('src/map.js').includes('DEFAULT_MAP_VIEW') || !app.includes('赤い照準')) errors.push('Map picker default and center indicator are incomplete.');
+if (!read('assets/icons/icon.svg').includes('手を取り合う二人')) errors.push('Warm icon description must explain the two people joining hands.');
 if (app.includes('https://www.npa.go.jp/bureau/safetylife/soudan/madoguchi.html') || data.includes('https://www.npa.go.jp/bureau/safetylife/soudan/madoguchi.html')) errors.push('Dead NPA consultation link remains.');
 
 const deploy = read('.github/workflows/deploy.yml');
@@ -178,7 +183,6 @@ if (!linkWorkflow.includes('schedule:') || !linkWorkflow.includes('tests/check-l
 
 const forbiddenTextPatterns = [
   { pattern: /\/Users\//, label: 'absolute macOS user path' },
-  { pattern: new RegExp(['shogo', 'ishikawa'].join('-'), 'i'), label: 'obsolete GitHub account name' },
   { pattern: new RegExp(['EpsilonLab', 'Atelier'].join('')), label: 'GitHub account name without required hyphens' },
   { pattern: /BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY/, label: 'private key material' },
   { pattern: /ghp_[A-Za-z0-9]{20,}/, label: 'GitHub personal access token' },
@@ -189,7 +193,7 @@ const forbiddenTextPatterns = [
 
 for (const absolutePath of walkPublicFiles()) {
   const extension = path.extname(absolutePath).toLowerCase();
-  if (!['', '.css', '.html', '.js', '.json', '.md', '.mjs', '.txt', '.xml', '.yml', '.yaml'].includes(extension)) continue;
+  if (!['', '.css', '.html', '.js', '.json', '.md', '.mjs', '.svg', '.txt', '.webmanifest', '.xml', '.yml', '.yaml'].includes(extension)) continue;
   const text = fs.readFileSync(absolutePath, 'utf8');
   const relativePath = path.relative(root, absolutePath);
   for (const { pattern, label } of forbiddenTextPatterns) if (pattern.test(text)) errors.push(`${label} found in public file: ${relativePath}`);

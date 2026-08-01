@@ -1,6 +1,6 @@
 {
   "name": "mamoreru-inochi",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "private": true,
   "type": "module",
   "description": "守れるいのち - 暮らしの防災アプリ",
@@ -9,7 +9,8 @@
     "validate": "node tests/validate-project.mjs",
     "check": "npm run validate && npm test",
     "serve": "python3 -m http.server 4173",
-    "check:links": "node tests/check-links.mjs"
+    "check:links": "node tests/check-links.mjs",
+    "check:privacy": "node --test tests/privacy-scan.test.mjs"
   },
   "engines": {
     "node": ">=20"

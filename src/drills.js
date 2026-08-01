@@ -151,7 +151,7 @@ function dateToIcs(dateText) {
   return /^\d{8}$/.test(date) ? date : '';
 }
 
-export function createDrillCalendarIcs(dateText, { title = '守れるいのち 防災訓練', description = '家族計画、備蓄、災害時の行動を短時間で確認します。' } = {}) {
+export function createDrillCalendarIcs(dateText, { title = '守れるいのち 防災訓練', description = '家族の防災計画、備蓄、災害時の行動を短時間で確認します。' } = {}) {
   const date = dateToIcs(dateText);
   if (!date) throw new Error('次回の訓練日を選んでください。');
   const uid = `mamoreru-inochi-${date}-${Date.now()}@epsilonlab`;

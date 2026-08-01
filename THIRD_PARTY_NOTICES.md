@@ -1,10 +1,10 @@
 # Third-Party Notices
 
-v0.3.0は、実行時に外部CDNからJavaScript、CSS、Webフォントを読み込みません。広告SDKとアクセス解析SDKも使用しません。
+v0.3.1は、実行時に外部CDNからJavaScript、CSS、Webフォントを読み込みません。広告SDKとアクセス解析SDKも使用しません。
 
 ## QR Code Generator
 
-家族計画とスマホ転送用のQRコード生成に、Kazuhiko Arase氏の`qrcode-generator`を基にしたJavaScriptをリポジトリ内へ同梱しています。
+家族の防災計画とスマホ転送用のQRコード生成に、Kazuhiko Arase氏の`qrcode-generator`を基にしたJavaScriptをリポジトリ内へ同梱しています。
 
 - Project: QR Code Generator for JavaScript
 - Copyright: Kazuhiko Arase

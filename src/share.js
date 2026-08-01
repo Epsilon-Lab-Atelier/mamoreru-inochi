@@ -64,7 +64,7 @@ export function createFamilyShareBundle(plan, selectedFields = defaultFamilyShar
 }
 
 export function encodeSharePayload(bundle) {
-  if (!bundle || bundle.type !== 'mamoreru-inochi-family-plan') throw new Error('家族計画の共有データではありません。');
+  if (!bundle || bundle.type !== 'mamoreru-inochi-family-plan') throw new Error('家族の防災計画の共有データではありません。');
   return `${FAMILY_SHARE_PREFIX}${utf8ToBase64Url(JSON.stringify(bundle))}`;
 }
 
@@ -78,7 +78,7 @@ export function decodeSharePayload(payload) {
     throw new Error('共有データを読み取れませんでした。');
   }
   if (parsed?.type !== 'mamoreru-inochi-family-plan' || Number(parsed?.v) !== SHARE_VERSION || !parsed?.data) {
-    throw new Error('対応していない家族計画データです。');
+    throw new Error('対応していない家族の防災計画データです。');
   }
   return parsed;
 }

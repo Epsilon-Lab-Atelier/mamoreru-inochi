@@ -1,9 +1,22 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
-<title id="title">守れるいのち</title><desc id="desc">家とハートを両手で包む、温かみのある防災アプリアイコン</desc>
-<rect width="512" height="512" rx="96" fill="#F7EFE3"/><circle cx="414" cy="86" r="46" fill="#E7BA6B"/><circle cx="100" cy="420" r="55" fill="#E9D7BD"/>
-<rect x="42" y="42" width="428" height="428" rx="92" fill="#FFF9EF"/><circle cx="256" cy="230" r="135" fill="#E7F0E9"/>
-<path d="M171 220 256 150l85 70" fill="#315F50"/><rect x="187" y="205" width="138" height="130" rx="18" fill="#FFFFFF"/><rect x="238" y="275" width="36" height="60" rx="9" fill="#E7A07D"/>
-<path d="M256 270c-27-20-38-38-38-54 0-17 13-28 29-28 5 0 9 4 9 11 0-7 4-11 9-11 16 0 29 11 29 28 0 16-11 34-38 54Z" fill="#D86D5C"/>
-<path d="M120 254c14 79 57 129 132 139" fill="none" stroke="#E7A07D" stroke-width="29" stroke-linecap="round"/><path d="M392 254c-14 79-57 129-132 139" fill="none" stroke="#E7A07D" stroke-width="29" stroke-linecap="round"/>
-<path d="M155 365h86M271 365h86" stroke="#E7A07D" stroke-width="36" stroke-linecap="round"/><path d="M167 358c42 64 136 64 178 0" fill="none" stroke="#638C78" stroke-width="13" stroke-linecap="round"/>
+  <title id="title">守れるいのち</title>
+  <desc id="desc">家とハート、その下で手を取り合う二人を描いた温かみのある防災アプリアイコン</desc>
+  <rect width="512" height="512" rx="96" fill="#F4E8D8"/>
+  <rect x="34" y="34" width="444" height="444" rx="88" fill="#FFF9F0"/>
+  <circle cx="256" cy="238" r="158" fill="#E5F0E8"/>
+
+  <path d="M159 222 256 142l97 80" fill="none" stroke="#315F50" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  <rect x="183" y="207" width="146" height="122" rx="19" fill="#FFFFFF" stroke="#315F50" stroke-width="10"/>
+  <rect x="238" y="273" width="36" height="56" rx="9" fill="#E7A07D"/>
+  <path d="M256 269c-29-21-42-40-42-58 0-18 14-31 31-31 7 0 12 4 16 10 4-6 9-10 16-10 17 0 31 13 31 31 0 18-13 37-42 58Z" fill="#D86D5C"/>
+
+  <circle cx="188" cy="350" r="23" fill="#E7A07D" stroke="#FFF9F0" stroke-width="7"/>
+  <circle cx="324" cy="350" r="23" fill="#D98A68" stroke="#FFF9F0" stroke-width="7"/>
+  <path d="M147 432c3-46 17-72 41-72s39 26 42 72Z" fill="#E7A07D"/>
+  <path d="M282 432c3-46 18-72 42-72s38 26 41 72Z" fill="#D98A68"/>
+  <path d="M207 376c19-13 33-13 49 8" fill="none" stroke="#E7A07D" stroke-width="17" stroke-linecap="round"/>
+  <path d="M305 376c-19-13-33-13-49 8" fill="none" stroke="#D98A68" stroke-width="17" stroke-linecap="round"/>
+  <circle cx="256" cy="384" r="9" fill="#C87457"/>
+
+  <path d="M148 423c50 56 166 56 216 0" fill="none" stroke="#638C78" stroke-width="13" stroke-linecap="round"/>
 </svg>

@@ -42,6 +42,14 @@ export const MAP_MIN_ZOOM = 5;
 export const MAP_MAX_ZOOM = 17;
 export const MAP_TILE_SIZE = 256;
 
+export const DEFAULT_MAP_VIEW = Object.freeze({
+  latitude: 36.2048,
+  longitude: 138.2529,
+  zoom: 5,
+  hazardLayer: 'none',
+  opacity: 0.62
+});
+
 export function clampLatitude(value) {
   return Math.max(-85.05112878, Math.min(85.05112878, Number(value)));
 }
@@ -89,6 +97,19 @@ export function moveMapCenter(center, direction, ratio = 0.35) {
   };
 }
 
+// deltaX/deltaY are the visible map-content movement in CSS/viewBox pixels.
+// Dragging the map to the right moves the geographic center to the west.
+export function moveMapCenterByPixels(center, deltaX, deltaY) {
+  const zoom = clampZoom(center.zoom);
+  const centerX = longitudeToWorldX(center.longitude, zoom);
+  const centerY = latitudeToWorldY(center.latitude, zoom);
+  return {
+    latitude: clampLatitude(worldYToLatitude(centerY - Number(deltaY || 0), zoom)),
+    longitude: wrapLongitude(worldXToLongitude(centerX - Number(deltaX || 0), zoom)),
+    zoom
+  };
+}
+
 export function pointFromViewport(center, xRatio, yRatio, width = 768, height = 512) {
   const zoom = clampZoom(center.zoom);
   const centerX = longitudeToWorldX(center.longitude, zoom);
@@ -106,7 +127,7 @@ export function tileUrl(template, z, x, y) {
   return template.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
 }
 
-export function buildMapTiles(center, { width = 768, height = 512, padding = 1 } = {}) {
+export function buildMapTiles(center, { width = 768, height = 512, padding = 0 } = {}) {
   const zoom = clampZoom(center.zoom);
   const worldX = longitudeToWorldX(center.longitude, zoom);
   const worldY = latitudeToWorldY(center.latitude, zoom);
@@ -145,7 +166,7 @@ export function urlsForMap(center, layerId, options = {}) {
   return [...new Set(urls)];
 }
 
-export function mapCacheName(version = '0.3.0') {
+export function mapCacheName(version = '0.3.1') {
   return `mamoreru-inochi-map-${version}`;
 }
 

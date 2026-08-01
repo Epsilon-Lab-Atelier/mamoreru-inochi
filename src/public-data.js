@@ -101,7 +101,54 @@ export function normalizeCoordinates(latitude, longitude) {
   };
 }
 
+export class PublicDataError extends Error {
+  constructor(message, { status = null, code = '', providerMessage = '', url = '' } = {}) {
+    super(message);
+    this.name = 'PublicDataError';
+    this.status = status;
+    this.code = code;
+    this.providerMessage = providerMessage;
+    this.url = url;
+    // 汎用ログ処理からも参照できる別名を保持します。
+    this.httpStatus = status;
+    this.providerCode = code;
+  }
+}
+
+function providerErrorDetails(payload) {
+  const error = payload?.error && typeof payload.error === 'object' ? payload.error : {};
+  return {
+    code: String(error.code || payload?.code || '').trim(),
+    message: String(error.message || payload?.message || '').trim()
+  };
+}
+
+function genericResponseMessage(status, code = '') {
+  const details = [code, status ? `HTTP ${status}` : ''].filter(Boolean).join(' / ');
+  const suffix = details ? `（${details}）` : '';
+  if (status === 400) return `情報提供元への問い合わせ内容を確認できませんでした${suffix}。`;
+  if (status === 403) return `情報提供元の利用上限またはアクセス制限により、情報を取得できませんでした${suffix}。`;
+  if (status === 404) return `この地点または情報に対応するデータを確認できませんでした${suffix}。`;
+  if (status === 500 || status === 503) return `情報提供元が一時的に利用できません${suffix}。時間をおいて、もう一度お試しください。`;
+  return `情報提供元から応答を取得できませんでした${suffix}。`;
+}
+
+function responseError(target, response, payload) {
+  const status = Number(response?.status) || null;
+  const details = providerErrorDetails(payload);
+  const message = target.hostname === 'www.j-shis.bosai.go.jp'
+    ? jshisErrorMessage(details.code, status)
+    : genericResponseMessage(status, details.code);
+  return new PublicDataError(message, {
+    status,
+    code: details.code,
+    providerMessage: details.message,
+    url: target.toString()
+  });
+}
+
 export async function fetchJsonWithTimeout(url, { timeoutMs = 12000, signal, fetchImpl = fetch } = {}) {
+  const target = new URL(String(url));
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(new DOMException('Timeout', 'AbortError')), timeoutMs);
   const relayAbort = () => controller.abort(signal?.reason);
@@ -110,7 +157,7 @@ export async function fetchJsonWithTimeout(url, { timeoutMs = 12000, signal, fet
     else signal.addEventListener('abort', relayAbort, { once: true });
   }
   try {
-    const response = await fetchImpl(url, {
+    const response = await fetchImpl(target.toString(), {
       method: 'GET',
       mode: 'cors',
       cache: 'no-store',
@@ -119,17 +166,28 @@ export async function fetchJsonWithTimeout(url, { timeoutMs = 12000, signal, fet
       signal: controller.signal,
       headers: { Accept: 'application/json, application/geo+json;q=0.9' }
     });
-    if (!response.ok) throw new Error(`情報提供元から応答を取得できませんでした（HTTP ${response.status}）。`);
-    return await response.json();
+    let payload = null;
+    try {
+      if (typeof response.text === 'function') {
+        const text = await response.text();
+        payload = text ? JSON.parse(text) : null;
+      } else if (typeof response.json === 'function') {
+        payload = await response.json();
+      }
+    } catch {
+      payload = null;
+    }
+    if (!response.ok || payload?.status === 'Error') throw responseError(target, response, payload);
+    if (payload === null) throw new PublicDataError('情報提供元の応答を読み取れませんでした。', { status: Number(response?.status) || null, url: target.toString() });
+    return payload;
   } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('情報の取得に時間がかかっています。通信状態を確認して、もう一度お試しください。');
+    if (error?.name === 'AbortError') throw new PublicDataError('情報の取得に時間がかかっています。通信状態を確認して、もう一度お試しください。', { url: target.toString() });
     throw error;
   } finally {
     clearTimeout(timeout);
     signal?.removeEventListener?.('abort', relayAbort);
   }
 }
-
 
 export async function fetchMapTile(url, { fetchImpl = fetch } = {}) {
   const target = new URL(String(url));
@@ -150,14 +208,15 @@ export async function fetchMapTile(url, { fetchImpl = fetch } = {}) {
 
 export function buildJshisUrl(latitude, longitude) {
   const point = normalizeCoordinates(latitude, longitude);
-  // J-SHIS地震ハザード情報APIが受け付ける経緯度範囲。
-  if (point.longitude < 122 || point.longitude > 154 || point.latitude < 20 || point.latitude > 46) {
-    throw new Error('J-SHISは日本周辺（経度122〜154度、緯度20〜46度）の地点で利用できます。');
+  // J-SHIS地震ハザード情報APIが受け付ける公式の経緯度範囲。
+  if (point.longitude < 122 || point.longitude > 154 || point.latitude < 20 || point.latitude > 47) {
+    throw new Error('J-SHISは日本周辺（経度122〜154度、緯度20〜47度）の地点で利用できます。');
   }
   const url = new URL('https://www.j-shis.bosai.go.jp/map/api/pshm/Y2024/AVR/TTL_MTTL/meshinfo.geojson');
   url.searchParams.set('position', `${point.longitude},${point.latitude}`);
   url.searchParams.set('epsg', '4326');
-  url.searchParams.set('attr', 'T30_I45_PS,T30_I50_PS,T30_I55_PS,T30_I60_PS');
+  // attrは単一属性を指定する任意項目です。複数属性をコンマで連結すると
+  // INVALID_REQUESTになるため、省略して全属性を1回で取得します。
   return url.toString();
 }
 
@@ -173,6 +232,11 @@ function optionalNumber(value) {
 }
 
 export function parseJshisPayload(payload) {
+  if (payload?.status === 'Error' || payload?.error) {
+    const code = String(payload?.error?.code || 'UNKNOWN_ERROR');
+    const providerMessage = String(payload?.error?.message || '');
+    throw new PublicDataError(jshisErrorMessage(code), { code, providerMessage });
+  }
   const properties = firstProperties(payload);
   const values = {
     intensity5Lower: optionalNumber(properties.T30_I45_PS),
@@ -181,20 +245,42 @@ export function parseJshisPayload(payload) {
     intensity6Upper: optionalNumber(properties.T30_I60_PS)
   };
   if (Object.values(values).every((value) => value === null)) {
-    throw new Error('この地点の地震ハザード情報を確認できませんでした。');
+    throw new PublicDataError('この地点の地震ハザード情報を確認できませんでした。', { code: 'NOT_FOUND' });
   }
   return values;
 }
 
+export function jshisErrorMessage(code, status = null) {
+  const technical = [code, status ? `HTTP ${status}` : ''].filter(Boolean).join(' / ');
+  const suffix = technical ? `（${technical}）` : '';
+  if (code === 'INVALID_REQUEST' || status === 400) return `J-SHISへの問い合わせ内容を確認できませんでした${suffix}。アプリを最新版へ更新して、もう一度お試しください。`;
+  if (code === 'NOT_FOUND' || status === 404) return `この地点の地震ハザード情報は見つかりませんでした${suffix}。地点を確認して、もう一度お試しください。`;
+  if (status === 403) return `J-SHISの利用上限またはアクセス制限により、地震ハザード情報を取得できませんでした${suffix}。時間をおいて、もう一度お試しください。`;
+  if (code === 'DB_CONNECT_ERROR' || code === 'UNKNOWN_ERROR' || (status && status >= 500)) {
+    return `J-SHISが一時的に利用できない可能性があります${suffix}。時間をおいて、もう一度お試しください。`;
+  }
+  return `J-SHISから地震ハザード情報を取得できませんでした${suffix}。時間をおいて、もう一度お試しください。`;
+}
+
 export async function fetchJshisHazard(latitude, longitude, options = {}) {
   const url = buildJshisUrl(latitude, longitude);
-  const payload = await fetchJsonWithTimeout(url, options);
-  return {
-    provider: 'jshis',
-    sourceUrl: url,
-    fetchedAt: new Date().toISOString(),
-    probabilities: parseJshisPayload(payload)
-  };
+  try {
+    const payload = await fetchJsonWithTimeout(url, options);
+    return {
+      provider: 'jshis',
+      sourceUrl: url,
+      fetchedAt: new Date().toISOString(),
+      meshcode: String(payload?.metaData?.meshcode || firstProperties(payload)?.meshcode || ''),
+      dataVersion: String(payload?.metaData?.version || 'Y2024'),
+      probabilities: parseJshisPayload(payload)
+    };
+  } catch (error) {
+    if (error instanceof PublicDataError) {
+      error.url ||= url;
+      throw error;
+    }
+    throw error;
+  }
 }
 
 export function longitudeToTileX(longitude, zoom) {
@@ -269,7 +355,7 @@ async function fetchGsiTile(layer, tile, options) {
     return { payload, url };
   } catch (error) {
     // データのないタイルは404になるため、その場合だけ空として扱う。
-    if (/HTTP 404/.test(String(error?.message))) return { payload: { type: 'FeatureCollection', features: [] }, url };
+    if (Number(error?.httpStatus) === 404 || /HTTP 404/.test(String(error?.message))) return { payload: { type: 'FeatureCollection', features: [] }, url };
     throw error;
   }
 }

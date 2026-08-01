@@ -2,21 +2,43 @@
   "id": "./",
   "name": "守れるいのち - 暮らしの防災アプリ",
   "short_name": "守れるいのち",
-  "description": "スマホに入れて、災害リスク・備蓄・家族計画・緊急時の行動をいつでも確認できる無料の防災アプリです。",
+  "description": "スマホに入れて、災害リスク・備蓄・家族の防災計画・緊急時の行動をいつでも確認できる無料の防災アプリです。",
   "lang": "ja",
   "dir": "ltr",
   "start_url": "./?source=pwa",
   "scope": "./",
   "display": "standalone",
-  "display_override": ["standalone", "minimal-ui"],
+  "display_override": [
+    "standalone",
+    "minimal-ui"
+  ],
   "orientation": "any",
   "background_color": "#f8f4ed",
   "theme_color": "#355c4d",
-  "categories": ["utilities", "education", "lifestyle"],
+  "categories": [
+    "utilities",
+    "education",
+    "lifestyle"
+  ],
   "icons": [
-    { "src": "./assets/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "./assets/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "./assets/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "./assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./assets/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
   ],
   "screenshots": [
     {
@@ -40,35 +62,60 @@
       "short_name": "災害時",
       "description": "災害別の行動ガイドをすぐに開きます。",
       "url": "./#/emergency",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "緊急連絡先を見る",
       "short_name": "連絡先",
-      "description": "119、110、118などの用途を確認します。",
+      "description": "119、110、118などの番号を発信前に確認します。",
       "url": "./#/contacts",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "備蓄を確認する",
       "short_name": "備蓄",
       "description": "家族に必要な備蓄量を確認します。",
       "url": "./#/stockpile",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
-      "name": "家族計画を見る",
-      "short_name": "家族計画",
+      "name": "家族の防災計画を見る",
+      "short_name": "防災計画",
       "description": "集合場所や連絡方法を確認します。",
       "url": "./#/family",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "防災訓練を始める",
       "short_name": "防災訓練",
       "description": "3分からの防災訓練を始めます。",
       "url": "./#/drills",
-      "icons": [{ "src": "./assets/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "./assets/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

@@ -43,6 +43,7 @@ import {
 } from './share.js';
 import {
   BASE_MAP,
+  DEFAULT_MAP_VIEW,
   HAZARD_MAP_LAYERS,
   MAP_MAX_ZOOM,
   MAP_MIN_ZOOM,
@@ -51,6 +52,7 @@ import {
   mapCacheName,
   markerPosition,
   moveMapCenter,
+  moveMapCenterByPixels,
   pointFromViewport,
   tileUrl,
   urlsForMap
@@ -130,7 +132,7 @@ let visibleMapLocationId = null;
 let locationDraft = null;
 let addressSearchResults = [];
 let familySharePreview = null;
-let mapView = { latitude: 35.681236, longitude: 139.767125, zoom: 14, hazardLayer: 'none', opacity: 0.62 };
+let mapView = { ...DEFAULT_MAP_VIEW };
 const INSTALL_GUIDE_ARTICLE_URL = '';
 let offlineStatus = {
   online: navigator.onLine,
@@ -363,7 +365,7 @@ async function initialize() {
   try {
     familySharePreview = readFamilyShareFromLocation(location.href);
   } catch (error) {
-    familySharePreview = { error: error.message || '家族計画の共有データを読み取れませんでした。' };
+    familySharePreview = { error: error.message || '家族の防災計画の共有データを読み取れませんでした。' };
   }
 
   const selected = activeLocation();
@@ -466,7 +468,7 @@ async function handleGlobalClick(event) {
     event.preventDefault();
     const confirmed = await confirmDialog(
       '診断を最初からやり直しますか？',
-      '現在の回答と診断結果を消去し、新しい回答を始めます。備蓄や家族計画は消えません。',
+      '現在の回答と診断結果を消去し、新しい回答を始めます。備蓄や家族の防災計画は消えません。',
       'やり直す'
     );
     if (confirmed) {
@@ -829,7 +831,7 @@ function renderOnboarding() {
           <div class="grid two">
             ${storageOption('none', '保存しない', 'この画面を開いている間だけ使います。再読み込みや終了で回答は消えます。')}
             ${storageOption('result', '診断結果だけ保存', '回答そのものは残さず、優先度・理由・確認項目だけを保存します。途中の回答は再読み込みで消えます。')}
-            ${storageOption('full', 'この端末に保存', '診断回答、備蓄、家の安全、家族計画、地域情報、任意連絡先をブラウザ内へ保存します。', true)}
+            ${storageOption('full', 'この端末に保存', '診断回答、備蓄、家の安全、家族の防災計画、地域情報、任意連絡先をブラウザ内へ保存します。', true)}
             ${storageOption('protected', 'パスフレーズで保護して保存', '保存内容を暗号化します。開くたびにパスフレーズが必要です。忘れると復元できません。')}
           </div>
 
@@ -962,7 +964,7 @@ function bindOnboarding() {
 function renderUnlockPage() {
   return `
     <div class="page-container onboarding-shell">
-      ${pageHeader('保護された保存データ', 'パスフレーズで開く', '診断・備蓄・家族計画は暗号化され、この端末のブラウザ内に保存されています。')}
+      ${pageHeader('保護された保存データ', 'パスフレーズで開く', '診断・備蓄・家族の防災計画は暗号化され、この端末のブラウザ内に保存されています。')}
       <div class="notice privacy">
         <p>パスフレーズは外部へ送信されません。正しいパスフレーズで復号できたときだけ、保存内容を表示します。</p>
       </div>
@@ -1008,7 +1010,7 @@ function bindUnlockPage() {
   document.querySelector('#locked-delete')?.addEventListener('click', async () => {
     const confirmed = await confirmDialog(
       '保護された保存データを削除しますか？',
-      '診断、備蓄、家族計画を含む、このアプリの保存内容がすべて消えます。元に戻せません。',
+      '診断、備蓄、家族の防災計画を含む、このアプリの保存内容がすべて消えます。元に戻せません。',
       '削除する'
     );
     if (!confirmed) return;
@@ -1053,7 +1055,7 @@ function nextRecommendedAction() {
   }
   const planFields = ['primaryMeetingPlace', 'contactRule', 'pickupRule'];
   if (!planFields.every((key) => String(state.familyPlan[key] || '').trim())) {
-    return { title: '家族の集合場所と連絡方法を決める', text: '電話がつながらない場合にも、同じ判断ができるよう短いルールを残します。', href: '#/family', label: '家族計画を作る' };
+    return { title: '家族の集合場所と連絡方法を決める', text: '電話がつながらない場合にも、同じ判断ができるよう短いルールを残します。', href: '#/family', label: '家族の防災計画を作る' };
   }
   if (!state.drills.lastCompletedAt) {
     return { title: '3分の防災訓練を試す', text: '実物を確認すると、チェックリストだけでは気づきにくい不足が見つかります。', href: '#/drills', label: '訓練を選ぶ' };
@@ -1069,7 +1071,7 @@ function renderInstallPromotion() {
       <div class="install-promotion-content">
         <p class="eyebrow">スマホでこそ役立つ防災アプリ</p>
         <h2 id="install-promotion-title">ホーム画面に入れて、いざという時すぐ開けるようにする</h2>
-        <p>URLを探さず1回で開けます。主要な行動ガイド、診断結果、備蓄、家族計画は、通信が不安定なときも確認できます。</p>
+        <p>URLを探さず1回で開けます。主要な行動ガイド、診断結果、備蓄、家族の防災計画は、通信が不安定なときも確認できます。</p>
         <ul class="install-benefits">
           <li>アプリストア不要</li><li>無料・広告なし</li><li>アカウント不要</li><li>主要機能はオフライン対応</li>
         </ul>
@@ -1120,7 +1122,7 @@ function renderDashboard() {
         <a class="button small" href="${escapeHtml(today.href)}">${escapeHtml(today.label)}</a>
       </section>
 
-      ${state.audit.migratedFromSchema ? `<div class="notice success section"><p>以前の版で保存したデータをv${APP_VERSION}用に引き継ぎました。念のため、家族計画と地点情報を一度確認してください。</p></div>` : ''}
+      ${state.audit.migratedFromSchema ? `<div class="notice success section"><p>以前の版で保存したデータをv${APP_VERSION}用に引き継ぎました。念のため、家族の防災計画と地点情報を一度確認してください。</p></div>` : ''}
 
       <div class="grid dashboard-grid">
         <section class="card wide" aria-labelledby="diagnosis-card-title">
@@ -1138,7 +1140,7 @@ function renderDashboard() {
         <section class="card clickable"><a class="card-link" href="#/drills"><div class="card-icon" aria-hidden="true">練</div><h2>防災訓練</h2><p>3分から始められる状況別の訓練で、実物と家族の行動を確認します。</p><p class="link-label">${state.drills.lastCompletedAt ? `最終 ${escapeHtml(formatDate(state.drills.lastCompletedAt.slice(0,10)))}` : '訓練を選ぶ'}</p></a></section>
         <section class="card clickable"><a class="card-link" href="#/inventory"><div class="card-icon" aria-hidden="true">庫</div><h2>備蓄リスト</h2><p>食品や用品の数量、保管場所、賞味期限を更新できます。</p><p class="link-label">${state.stockpile.inventory.length}品を登録中</p></a></section>
         <section class="card clickable"><a class="card-link" href="#/locations"><div class="card-icon" aria-hidden="true">地</div><h2>地域情報・防災地図</h2><p>現在地、住所、地図から地点を選び、災害別の地図と避難場所を確認します。</p><p class="link-label">${state.locations.items.length}地点を登録中</p></a></section>
-        <section class="card clickable"><a class="card-link" href="#/contacts"><div class="card-icon" aria-hidden="true">電</div><h2>緊急連絡先</h2><p>119・110・118の使い分けと、相談・道路・災害伝言を確認します。</p><p class="link-label">用途を確認してから電話アプリへ</p></a></section>
+        <section class="card clickable"><a class="card-link" href="#/contacts"><div class="card-icon" aria-hidden="true">電</div><h2>緊急連絡先</h2><p>119・110・118の使い分けと、相談・道路・災害伝言を確認します。</p><p class="link-label">発信前に番号と用途を確認</p></a></section>
         <section class="card clickable"><a class="card-link" href="#/learn"><div class="card-icon" aria-hidden="true">知</div><h2>災害への備え</h2><p>平常時の準備、避難、情報の確かめ方を短い項目で読めます。</p><p class="link-label">防災ガイドを読む</p></a></section>
         <section class="card clickable"><a class="card-link" href="#/install"><div class="card-icon" aria-hidden="true">＋</div><h2>スマホに入れる</h2><p>ホーム画面への追加、オフライン準備、新しい版への更新を案内します。</p><p class="link-label">${installed ? 'スマホアプリとして利用中' : '端末別の手順を見る'}</p></a></section>
         <section class="card clickable"><a class="card-link" href="#/help"><div class="card-icon" aria-hidden="true">?</div><h2>使い方とヘルプ</h2><p>保存、バックアップ、オフライン利用、表示設定を案内します。</p><p class="link-label">ガイドを見る</p></a></section>
@@ -1955,7 +1957,7 @@ function familyPlanCompletion(plan = state.familyPlan) {
 }
 
 function renderFamilyTabs(active) {
-  return `<nav class="tabs" aria-label="家族計画のメニュー">
+  return `<nav class="tabs" aria-label="家族の防災計画のメニュー">
     <a class="button ${active === 'edit' ? '' : 'secondary'} small" href="#/family">計画を作る</a>
     <a class="button ${active === 'share' ? '' : 'secondary'} small" href="#/family/share">家族へ共有</a>
     <a class="button ${active === 'import' ? '' : 'secondary'} small" href="#/family/import">共有を受け取る</a>
@@ -2025,7 +2027,7 @@ function renderFamilyPlan(mode = 'edit') {
         </fieldset>
 
         <div class="button-row">
-          <button class="button" type="submit">家族計画を保存する</button>
+          <button class="button" type="submit">家族の防災計画を保存する</button>
           <a class="button secondary" href="#/family/share">家族へ共有する</a>
           <a class="button secondary" href="#/print">印刷用ページを見る</a>
           <a class="button subtle" href="#/">ホームへ</a>
@@ -2059,7 +2061,7 @@ function createQrSvgMarkup(text, { size = 320 } = {}) {
         if (qr.isDark(row, col)) cells.push(`<rect x="${col + margin}" y="${row + margin}" width="1" height="1"/>`);
       }
     }
-    return `<svg class="share-qr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${size}" height="${size}" role="img" aria-label="家族計画を受け取るQRコード"><rect width="100%" height="100%" fill="#fff"/><g fill="#1f3d34">${cells.join('')}</g></svg>`;
+    return `<svg class="share-qr" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${size}" height="${size}" role="img" aria-label="家族の防災計画を受け取るQRコード"><rect width="100%" height="100%" fill="#fff"/><g fill="#1f3d34">${cells.join('')}</g></svg>`;
   } catch (error) {
     return `<p class="error-text">QRコードを作成できませんでした。共有項目を減らすか、ファイル共有をご利用ください。</p>`;
   }
@@ -2073,7 +2075,7 @@ function renderFamilyShare() {
   return `<div class="page-container">
     ${pageHeader('家族の防災計画', '必要な項目だけ家族へ共有する', '共有する内容を選び、QRコード、共有リンク、ファイルのいずれかで渡せます。')}
     ${renderFamilyTabs('share')}
-    <div class="notice privacy"><p><strong>QRコードはこの端末内で作ります。</strong> EpsilonLabのサーバへ家族計画を送信しません。QRを撮影した人は内容を読み取れるため、電話番号・正確な位置・支援情報は標準で共有しません。</p></div>
+    <div class="notice privacy"><p><strong>QRコードはこの端末内で作ります。</strong> EpsilonLabのサーバへ家族の防災計画を送信しません。QRを撮影した人は内容を読み取れるため、電話番号・正確な位置・支援情報は標準で共有しません。</p></div>
     <form id="family-share-form" class="card section">
       <fieldset><legend>共有する情報</legend>
         <div class="share-field-grid">${FAMILY_SHARE_FIELDS.map((field) => `<label class="storage-option"><input type="checkbox" name="shareField" value="${field.id}"${selected.includes(field.id) ? ' checked' : ''}><span><strong>${escapeHtml(field.label)}</strong><small>${field.group === 'sensitive' ? '個人情報を含まないか確認してください。' : field.group === 'contact' ? '連絡先を含む場合は慎重に共有してください。' : '家族で共有しやすい項目です。'}</small></span></label>`).join('')}</div>
@@ -2086,7 +2088,7 @@ function renderFamilyShare() {
       <div class="button-row"><button class="button" type="button" id="family-share-system">端末の共有機能を使う</button><button class="button secondary" type="button" id="family-share-copy">共有リンクをコピー</button><button class="button secondary" type="button" id="family-share-download">共有ファイルを保存</button></div>
       <details><summary>共有リンクを表示</summary><p class="break-all"><code>${escapeHtml(url)}</code></p></details>
     </section>` : ''}
-    <div class="notice warning section"><p>QRコードや共有ファイルは、家族計画の控えです。リアルタイム同期や安否確認ではありません。計画を更新したら、もう一度共有してください。</p></div>
+    <div class="notice warning section"><p>QRコードや共有ファイルは、家族の防災計画の控えです。リアルタイム同期や安否確認ではありません。計画を更新したら、もう一度共有してください。</p></div>
   </div>`;
 }
 
@@ -2101,7 +2103,7 @@ function renderFamilyImport() {
     return [{ label: field.label, value: display }];
   }) : [];
   return `<div class="page-container">
-    ${pageHeader('家族の防災計画', '共有された計画を確認する', '内容を見てから、この端末の家族計画へ追加します。')}
+    ${pageHeader('家族の防災計画', '共有された計画を確認する', '内容を見てから、この端末に保存している家族の防災計画へ追加します。')}
     ${renderFamilyTabs('import')}
     ${preview?.error ? `<div class="notice danger"><p>${escapeHtml(preview.error)}</p></div>` : ''}
     ${hasData ? `<section class="card section"><h2>受け取った内容</h2><dl class="summary-list">${entries.map((item) => `<div><dt>${escapeHtml(item.label)}</dt><dd>${escapeHtml(item.value)}</dd></div>`).join('')}</dl><p class="data-source-stamp">作成: ${escapeHtml(formatDateTime(preview.createdAt))}</p><div class="button-row"><button class="button" type="button" id="family-import-apply">この端末へ追加する</button><button class="button secondary" type="button" id="family-import-discard">取り込まない</button></div></section>` : `<section class="card section"><h2>共有コードまたはファイルを読み込む</h2><p>QRコードを読み取ってこのページを開くほか、共有コードの貼り付けやJSONファイルの読み込みができます。</p><form id="family-import-form"><div class="form-field"><label for="family-import-text">共有コード</label><textarea id="family-import-text" name="payload" rows="6" placeholder="MI-FAMILY:... または共有リンク"></textarea></div><div class="form-field"><label for="family-import-file">共有ファイル</label><input id="family-import-file" type="file" accept="application/json,.json"></div><div class="button-row"><button class="button" type="submit">内容を確認する</button></div></form></section>`}
@@ -2135,7 +2137,7 @@ function bindFamilyPlan(mode = 'edit') {
   }
   if (mode === 'import') {
     document.querySelector('#family-import-apply')?.addEventListener('click', async () => {
-      const confirmed = await confirmDialog('共有された内容を追加しますか？', '共有された項目だけを現在の家族計画へ追加します。同じ項目は共有内容で更新されます。', '追加する');
+      const confirmed = await confirmDialog('共有された内容を追加しますか？', '共有された項目だけを現在の家族の防災計画に追加します。同じ項目は共有内容で更新されます。', '追加する');
       if (!confirmed) return;
       state.familyPlan = mergeFamilyPlan(state.familyPlan, familySharePreview);
       familySharePreview = null;
@@ -2143,7 +2145,7 @@ function bindFamilyPlan(mode = 'edit') {
       await persistCurrentState();
       location.hash = '#/family';
       render();
-      showToast('共有された家族計画を追加しました。');
+      showToast('共有された家族の防災計画を追加しました。');
     });
     document.querySelector('#family-import-discard')?.addEventListener('click', () => {
       familySharePreview = null;
@@ -2192,14 +2194,14 @@ function renderDrills(mode = 'home') {
   if (mode === 'result') return renderDrillResult();
   const history = state.drills.history || [];
   return `<div class="page-container">
-    ${pageHeader('防災訓練', '3分から、実物を確認する', uiText('点数を競う訓練ではありません。気づいた不足を、備蓄や家族計画へ反映します。', '短い時間で、家にある物と家族の行動を確認します。'))}
+    ${pageHeader('防災訓練', '3分から、実物を確認する', uiText('点数を競う訓練ではありません。気づいた不足を、備蓄や家族の防災計画へ反映します。', '短い時間で、家にある物と家族の行動を確認します。'))}
     <div class="notice privacy"><p>訓練の記録は、この端末だけに保存します。位置情報や結果を外部へ送りません。</p></div>
     <form id="drill-start-form" class="card section">
       <div class="form-grid">
         <div class="form-field full"><label for="drill-scenario">想定する状況</label><select id="drill-scenario" name="scenarioId">${DRILL_SCENARIOS.map((item) => `<option value="${item.id}">${escapeHtml(item.title)} - ${escapeHtml(item.summary)}</option>`).join('')}</select></div>
         <div class="form-field"><label for="drill-duration">使う時間</label><select id="drill-duration" name="duration">${DRILL_DURATIONS.map((duration) => `<option value="${duration}"${duration === 5 ? ' selected' : ''}>${duration}分</option>`).join('')}</select></div>
       </div>
-      <div class="button-row"><button class="button" type="submit">訓練を始める</button><a class="button secondary" href="#/family">家族計画を見る</a></div>
+      <div class="button-row"><button class="button" type="submit">訓練を始める</button><a class="button secondary" href="#/family">家族の防災計画を見る</a></div>
     </form>
     <section class="section"><div class="section-heading"><div><p class="eyebrow">これまで</p><h2>訓練の記録</h2></div><span class="badge">${history.length}件</span></div>
       ${history.length ? `<div class="grid two">${history.slice(0, 10).map((item) => `<article class="card"><h3>${escapeHtml(item.title)}</h3><p>${escapeHtml(formatDateTime(item.completedAt))} / ${item.duration}分</p><p>確認 ${item.completedCount}/${item.totalCount}</p>${item.actionItem ? `<p><strong>次にすること:</strong> ${escapeHtml(item.actionItem)}</p>` : ''}</article>`).join('')}</div>` : '<div class="empty-state card"><p>まだ訓練の記録はありません。まず3分から始められます。</p></div>'}
@@ -2230,7 +2232,7 @@ function renderDrillResult() {
   return `<div class="page-container">
     ${pageHeader('防災訓練', '確認したことを、次の備えへつなげる', '点数ではなく、実際に確認できたことと次の一歩を残します。')}
     <section class="card"><p class="eyebrow">${escapeHtml(latest.title)}</p><h2>${latest.completedCount}/${latest.totalCount}項目を確認しました</h2>${latest.reflection ? `<p><strong>気づいたこと:</strong> ${escapeHtml(latest.reflection)}</p>` : ''}${latest.actionItem ? `<div class="notice warning"><p><strong>次回までに行うこと:</strong> ${escapeHtml(latest.actionItem)}</p></div>` : ''}<p class="data-source-stamp">完了: ${escapeHtml(formatDateTime(latest.completedAt))}</p></section>
-    <div class="grid three section"><a class="card clickable card-link" href="#/stockpile/results"><h2>備蓄へ反映</h2><p>不足していた物や日数を確認します。</p></a><a class="card clickable card-link" href="#/family"><h2>家族計画へ反映</h2><p>集合場所、連絡、役割を更新します。</p></a><a class="card clickable card-link" href="#/safety"><h2>家の安全へ反映</h2><p>家具や避難経路を確認します。</p></a></div>
+    <div class="grid three section"><a class="card clickable card-link" href="#/stockpile/results"><h2>備蓄へ反映</h2><p>不足していた物や日数を確認します。</p></a><a class="card clickable card-link" href="#/family"><h2>家族の防災計画へ反映</h2><p>集合場所、連絡、役割を更新します。</p></a><a class="card clickable card-link" href="#/safety"><h2>家の安全へ反映</h2><p>家具や避難経路を確認します。</p></a></div>
     <div class="button-row"><a class="button" href="#/drills">別の訓練をする</a><a class="button secondary" href="#/">ホームへ</a></div>
   </div>`;
 }
@@ -2304,6 +2306,32 @@ function locationFormValue() {
   return selected ? { ...selected } : blankLocation();
 }
 
+function optionalCoordinate(value) {
+  if (value === '' || value === null || value === undefined) return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function pointFromLocationValue(value) {
+  if (!value) return null;
+  const latitude = optionalCoordinate(value.latitude);
+  const longitude = optionalCoordinate(value.longitude);
+  if (latitude === null || longitude === null) return null;
+  try {
+    return normalizeCoordinates(latitude, longitude);
+  } catch {
+    return null;
+  }
+}
+
+function initialMapViewForLocation(draft) {
+  const draftPoint = pointFromLocationValue(draft);
+  if (draftPoint) return { ...DEFAULT_MAP_VIEW, ...draftPoint, zoom: 14 };
+  const selectedPoint = pointFromLocationValue(activeLocation());
+  if (selectedPoint) return { ...DEFAULT_MAP_VIEW, ...selectedPoint, zoom: 14 };
+  return { ...DEFAULT_MAP_VIEW };
+}
+
 function renderLocations() {
   const selected = activeLocation();
   const formLocation = locationFormValue();
@@ -2343,7 +2371,7 @@ function renderLocations() {
               <div class="form-field full"><label for="location-address-label">住所・目印（任意）</label><input id="location-address-label" name="addressLabel" type="text" maxlength="160" value="${escapeHtml(formLocation.addressLabel || '')}" placeholder="例: ○○駅の北側"><p class="hint">端末内の表示用です。公的情報の取得時には送信しません。</p></div>
               <div class="form-field full"><label for="location-jma-office">警報・注意報を確認する地域</label><select id="location-jma-office" name="jmaOfficeCode"><option value="">選択してください</option>${JMA_OFFICES.map((office) => `<option value="${office.code}"${formLocation.jmaOfficeCode === office.code ? ' selected' : ''}>${escapeHtml(office.name)}</option>`).join('')}</select></div>
             </div>
-            <details class="section"><summary>詳細設定: 座標を直接確認・入力する</summary><div class="form-grid"><div class="form-field"><label for="location-latitude">緯度</label><input id="location-latitude" name="latitude" type="number" min="-90" max="90" step="0.000001" required value="${escapeHtml(formLocation.latitude)}" placeholder="35.681236"></div><div class="form-field"><label for="location-longitude">経度</label><input id="location-longitude" name="longitude" type="number" min="-180" max="180" step="0.000001" required value="${escapeHtml(formLocation.longitude)}" placeholder="139.767125"></div></div></details>
+            <details class="section"><summary>詳細設定: 座標を直接確認・入力する</summary><div class="form-grid"><div class="form-field"><label for="location-latitude">緯度</label><input id="location-latitude" name="latitude" type="number" min="-90" max="90" step="0.000001" required value="${escapeHtml(formLocation.latitude)}" placeholder="例: 35.000000"></div><div class="form-field"><label for="location-longitude">経度</label><input id="location-longitude" name="longitude" type="number" min="-180" max="180" step="0.000001" required value="${escapeHtml(formLocation.longitude)}" placeholder="例: 135.000000"></div></div></details>
             <div class="button-row"><button class="button" type="submit">${formLocation.id ? '地点を更新する' : 'この地点を登録する'}</button></div>
           </form>
         </div>
@@ -2359,13 +2387,12 @@ function renderLocations() {
     </div>`;
 }
 
-function renderLocationPickerMap(formLocation) {
-  const hasPoint = Number.isFinite(Number(formLocation.latitude)) && Number.isFinite(Number(formLocation.longitude)) && formLocation.latitude !== '' && formLocation.longitude !== '';
-  if (hasPoint) mapView = { ...mapView, latitude: Number(formLocation.latitude), longitude: Number(formLocation.longitude) };
-  return `<section class="map-picker section"><div class="section-heading"><div><p class="eyebrow">地図から選ぶ</p><h3>中央の印へ場所を合わせる</h3></div><span class="badge">拡大 ${mapView.zoom}</span></div>
+function renderLocationPickerMap() {
+  return `<section class="map-picker section"><div class="section-heading"><div><p class="eyebrow">地図から選ぶ</p><h3>赤い照準へ場所を合わせる</h3></div><span class="badge" data-map-zoom-label>拡大 ${mapView.zoom}</span></div>
+    <p class="map-picker-help">地図を指やマウスで動かすか、矢印ボタンを使います。赤い照準の中央が登録する場所です。</p>
     ${renderMapCanvas(mapView, null, true)}
     ${renderMapNavigationControls(true)}
-    <div class="button-row"><button class="button" type="button" id="map-use-center">中央の場所をフォームへ入力</button><button class="button subtle" type="button" id="map-picker-close">地図を閉じる</button></div>
+    <div class="button-row"><button class="button" type="button" id="map-use-center">赤い照準の場所を選ぶ</button><button class="button subtle" type="button" id="map-picker-close">地図を閉じる</button></div>
   </section>`;
 }
 
@@ -2380,8 +2407,8 @@ function renderLocationDataPanel(locationItem) {
     <p>取得時刻を必ず確認し、最新情報は自治体・各機関の公式情報を優先してください。地図上に色がないことは、安全を保証しません。</p>
 
     <article class="card hazard-map-card">
-      <div class="section-heading"><div><p class="eyebrow">選択地点の周辺</p><h3>災害別の防災地図</h3></div>${mapVisible ? `<span class="badge brand">${escapeHtml(HAZARD_MAP_LAYERS[state.locations.map.hazardLayer]?.name || '災害レイヤなし')}</span>` : ''}</div>
-      ${mapVisible ? `${renderMapCanvas({ latitude: Number(locationItem.latitude), longitude: Number(locationItem.longitude), zoom: mapView.zoom, hazardLayer: state.locations.map.hazardLayer, opacity: state.locations.map.opacity }, locationItem, false)}${renderMapNavigationControls(false)}${renderMapLayerControls()}${renderOfflineMapControls(locationItem)}` : `<p>「防災地図を表示」を押すと、国土地理院の背景地図と、選んだ災害レイヤを画面内に表示します。</p><div class="button-row"><button class="button" type="button" id="location-map-show"${navigator.onLine ? '' : ' disabled'}>防災地図を表示</button></div>`}
+      <div class="section-heading"><div><p class="eyebrow">選択地点の周辺</p><h3>災害別の防災地図</h3></div>${mapVisible ? `<span class="badge brand" data-current-hazard-label>${escapeHtml(HAZARD_MAP_LAYERS[state.locations.map.hazardLayer]?.name || '災害レイヤなし')}</span>` : ''}</div>
+      ${mapVisible ? `${renderMapCanvas({ ...mapView, hazardLayer: state.locations.map.hazardLayer, opacity: state.locations.map.opacity }, locationItem, false)}${renderMapNavigationControls(false)}${renderMapLayerControls()}${renderOfflineMapControls(locationItem)}` : `<p>「防災地図を表示」を押すと、国土地理院の背景地図と、選んだ災害レイヤを画面内に表示します。</p><div class="button-row"><button class="button" type="button" id="location-map-show"${navigator.onLine ? '' : ' disabled'}>防災地図を表示</button></div>`}
       <p class="small-text">出典: 国土地理院 / ハザードマップポータルサイト。未整備・未提供の区域があります。自治体の最新ハザードマップも確認してください。</p>
       <div class="button-row"><a class="button secondary small" href="${escapeHtml(buildGsiMapUrl(locationItem.latitude, locationItem.longitude))}" target="_blank" rel="noopener noreferrer">地理院地図で詳しく見る</a><a class="button secondary small" href="https://disaportal.gsi.go.jp/" target="_blank" rel="noopener noreferrer">公式ハザードマップを開く</a></div>
     </article>
@@ -2406,7 +2433,7 @@ function renderJshisResult(result) {
       <div><dt>震度6強以上</dt><dd>${escapeHtml(formatProbability(values.intensity6Upper))}</dd></div>
     </dl>
     <p class="small-text">確率が低くても地震が起きないことを意味しません。建物・家具・避難の備えとは分けて確認してください。</p>
-    <p class="data-source-stamp">取得: ${escapeHtml(formatDateTime(result.fetchedAt))} / 防災科学技術研究所 J-SHIS</p>`;
+    <p class="data-source-stamp">取得: ${escapeHtml(formatDateTime(result.fetchedAt))} / 防災科学技術研究所 J-SHIS${result.dataVersion ? ` / データ版 ${escapeHtml(result.dataVersion)}` : ''}${result.meshcode ? ` / メッシュ ${escapeHtml(result.meshcode)}` : ''}</p>`;
 }
 
 function renderGsiResult(result) {
@@ -2438,12 +2465,12 @@ function renderMapCanvas(centerInput, locationItem = null, interactive = false) 
     longitude: Number(centerInput.longitude),
     zoom: clampZoom(centerInput.zoom)
   };
-  const layout = buildMapTiles(center, { width: 768, height: 512, padding: 1 });
+  const layout = buildMapTiles(center, { width: 768, height: 512, padding: 0 });
   const layerId = centerInput.hazardLayer || state.locations.map.hazardLayer || 'none';
   const layer = HAZARD_MAP_LAYERS[layerId] || HAZARD_MAP_LAYERS.none;
   const opacity = Math.max(0.2, Math.min(0.9, Number(centerInput.opacity ?? state.locations.map.opacity ?? 0.62)));
-  const baseImages = layout.tiles.map((tile) => `<image href="${escapeHtml(tileUrl(BASE_MAP.template, tile.z, tile.x, tile.y))}" x="${tile.left}" y="${tile.top}" width="256" height="256" preserveAspectRatio="none"/>`).join('');
-  const hazardImages = layer.templates.flatMap((template) => layout.tiles.map((tile) => `<image href="${escapeHtml(tileUrl(template, tile.z, tile.x, tile.y))}" x="${tile.left}" y="${tile.top}" width="256" height="256" opacity="${opacity}" preserveAspectRatio="none"/>`)).join('');
+  const baseImages = layout.tiles.map((tile) => `<image class="base-tile" href="${escapeHtml(tileUrl(BASE_MAP.template, tile.z, tile.x, tile.y))}" x="${tile.left}" y="${tile.top}" width="256" height="256" preserveAspectRatio="none"/>`).join('');
+  const hazardImages = layer.templates.flatMap((template) => layout.tiles.map((tile) => `<image class="hazard-tile" href="${escapeHtml(tileUrl(template, tile.z, tile.x, tile.y))}" x="${tile.left}" y="${tile.top}" width="256" height="256" opacity="${opacity}" preserveAspectRatio="none"/>`)).join('');
   const markerPoint = locationItem ? { latitude: Number(locationItem.latitude), longitude: Number(locationItem.longitude) } : center;
   const marker = markerPosition(center, markerPoint, 768, 512);
   const places = state.locations.map.showShelters && locationItem?.publicData?.gsi?.places
@@ -2455,27 +2482,36 @@ function renderMapCanvas(centerInput, locationItem = null, interactive = false) 
     const label = place.kind === 'emergency' ? '避' : place.kind === 'welfare-shelter' ? '福' : '所';
     return `<g class="map-shelter-marker" aria-label="${escapeHtml(place.name)}"><circle cx="${position.left}" cy="${position.top}" r="12"/><text x="${position.left}" y="${position.top + 4}" text-anchor="middle">${label}</text><title>${escapeHtml(place.name)}</title></g>`;
   }).join('');
-  return `<div class="hazard-map-wrap">
-    <svg class="hazard-map${interactive ? ' map-interactive' : ''}" viewBox="0 0 768 512" role="img" aria-label="${interactive ? '場所を選ぶ地図' : `${escapeHtml(locationItem?.name || '選択地点')}周辺の防災地図`}" data-map-interactive="${interactive ? 'true' : 'false'}">
-      <rect width="768" height="512" fill="#e9e4da"/>
-      ${baseImages}${hazardImages}${shelterMarkers}
-      ${interactive ? '<g class="map-crosshair" aria-hidden="true"><circle cx="384" cy="256" r="18"/><path d="M384 226v60M354 256h60"/></g>' : `<g class="map-location-marker"><circle cx="${marker.left}" cy="${marker.top}" r="15"/><circle cx="${marker.left}" cy="${marker.top}" r="5"/><title>${escapeHtml(locationItem?.name || '選択地点')}</title></g>`}
-    </svg>
-    <p class="map-attribution">地図: 国土地理院${layer.attribution ? ` / ${escapeHtml(layer.attribution)}` : ''}</p>
+  const hostId = interactive ? 'location-picker-map-host' : 'location-data-map-host';
+  const ariaLabel = interactive
+    ? '場所を選ぶ地図。中央の赤い照準が登録する場所です。地図を動かすこともできます。'
+    : `${escapeHtml(locationItem?.name || '選択地点')}周辺の防災地図。地図を動かすこともできます。`;
+  return `<div id="${hostId}" class="map-canvas-host" data-map-picker="${interactive ? 'true' : 'false'}">
+    <div class="hazard-map-wrap${interactive ? ' picker-map-wrap' : ''}" data-map-surface="true">
+      <svg class="hazard-map${interactive ? ' map-interactive' : ''}" viewBox="0 0 768 512" preserveAspectRatio="xMidYMid slice" role="img" aria-label="${ariaLabel}">
+        <rect width="768" height="512" fill="#e9e4da"/>
+        ${baseImages}${hazardImages}${shelterMarkers}
+        ${interactive ? '' : `<g class="map-location-marker"><circle cx="${marker.left}" cy="${marker.top}" r="15"/><circle cx="${marker.left}" cy="${marker.top}" r="5"/><title>${escapeHtml(locationItem?.name || '選択地点')}</title></g>`}
+      </svg>
+      ${interactive ? '<div class="map-center-indicator" aria-hidden="true"><span class="map-center-crosshair"></span><span class="map-center-label">登録する場所</span></div>' : ''}
+      <p class="map-attribution">地図: 国土地理院${layer.attribution ? ` / ${escapeHtml(layer.attribution)}` : ''}</p>
+    </div>
+    <p class="map-center-readout" data-map-center-readout>地図中央: 緯度 ${center.latitude.toFixed(5)} / 経度 ${center.longitude.toFixed(5)}</p>
   </div>`;
 }
 
 function renderMapNavigationControls(picker = false) {
-  return `<div class="map-controls" aria-label="地図操作">
-    <div class="map-pan-grid"><span></span><button type="button" class="button secondary small" data-map-move="up" aria-label="地図を北へ移動">↑</button><span></span><button type="button" class="button secondary small" data-map-move="left" aria-label="地図を西へ移動">←</button><button type="button" class="button secondary small" data-map-reset="${picker ? 'picker' : 'location'}" aria-label="登録地点へ戻す">●</button><button type="button" class="button secondary small" data-map-move="right" aria-label="地図を東へ移動">→</button><span></span><button type="button" class="button secondary small" data-map-move="down" aria-label="地図を南へ移動">↓</button><span></span></div>
-    <div class="button-row"><button class="button secondary small" type="button" data-map-zoom="out"${mapView.zoom <= MAP_MIN_ZOOM ? ' disabled' : ''}>縮小 −</button><span class="badge">拡大 ${mapView.zoom}</span><button class="button secondary small" type="button" data-map-zoom="in"${mapView.zoom >= MAP_MAX_ZOOM ? ' disabled' : ''}>拡大 ＋</button></div>
+  return `<div class="map-controls" aria-label="地図操作" data-map-controls="${picker ? 'picker' : 'location'}">
+    <div class="map-pan-grid"><span></span><button type="button" class="button secondary small" data-map-move="up" aria-label="地図を北へ移動">↑</button><span></span><button type="button" class="button secondary small" data-map-move="left" aria-label="地図を西へ移動">←</button><button type="button" class="button secondary small map-center" data-map-reset="${picker ? 'picker' : 'location'}" aria-label="${picker ? '日本全体または入力済み地点へ戻す' : '登録地点へ戻す'}">●</button><button type="button" class="button secondary small" data-map-move="right" aria-label="地図を東へ移動">→</button><span></span><button type="button" class="button secondary small" data-map-move="down" aria-label="地図を南へ移動">↓</button><span></span></div>
+    <div class="button-row"><button class="button secondary small" type="button" data-map-zoom="out"${mapView.zoom <= MAP_MIN_ZOOM ? ' disabled' : ''}>縮小 −</button><span class="badge" data-map-zoom-label>拡大 ${mapView.zoom}</span><button class="button secondary small" type="button" data-map-zoom="in"${mapView.zoom >= MAP_MAX_ZOOM ? ' disabled' : ''}>拡大 ＋</button></div>
   </div>`;
 }
 
 function renderMapLayerControls() {
+  const opacityPercent = Math.round(Number(state.locations.map.opacity || 0.62) * 100);
   return `<div class="map-layer-controls section">
     <div class="form-field"><label for="hazard-map-layer">表示する災害</label><select id="hazard-map-layer">${Object.values(HAZARD_MAP_LAYERS).map((layer) => `<option value="${layer.id}"${state.locations.map.hazardLayer === layer.id ? ' selected' : ''}>${escapeHtml(layer.name)}</option>`).join('')}</select></div>
-    <div class="form-field"><label for="hazard-map-opacity">災害レイヤの濃さ: ${Math.round(Number(state.locations.map.opacity || 0.62) * 100)}%</label><input id="hazard-map-opacity" type="range" min="20" max="90" step="5" value="${Math.round(Number(state.locations.map.opacity || 0.62) * 100)}"></div>
+    <div class="form-field"><label for="hazard-map-opacity">災害レイヤの濃さ: <span data-map-opacity-label>${opacityPercent}%</span></label><input id="hazard-map-opacity" type="range" min="20" max="90" step="5" value="${opacityPercent}"></div>
     <label><input id="map-show-shelters" type="checkbox"${state.locations.map.showShelters ? ' checked' : ''}> 取得済みの避難場所を地図に重ねる</label>
     <div class="notice warning"><p>色が付いていない場所も、安全を保証するものではありません。データ未整備、縮尺、区域外などの可能性があります。</p></div>
   </div>`;
@@ -2517,31 +2553,138 @@ function resetMapViewFromPoint(latitude, longitude, zoom = 14) {
   mapView = { ...mapView, latitude: Number(latitude), longitude: Number(longitude), zoom: clampZoom(zoom) };
 }
 
+function updateMapControlState() {
+  document.querySelectorAll('[data-map-zoom-label]').forEach((label) => { label.textContent = `拡大 ${mapView.zoom}`; });
+  document.querySelectorAll('[data-map-zoom="out"]').forEach((button) => { button.disabled = mapView.zoom <= MAP_MIN_ZOOM; });
+  document.querySelectorAll('[data-map-zoom="in"]').forEach((button) => { button.disabled = mapView.zoom >= MAP_MAX_ZOOM; });
+  document.querySelectorAll('[data-map-center-readout]').forEach((readout) => {
+    readout.textContent = `地図中央: 緯度 ${Number(mapView.latitude).toFixed(5)} / 経度 ${Number(mapView.longitude).toFixed(5)}`;
+  });
+}
+
+function refreshMapViewport({ picker = false } = {}) {
+  const hostId = picker ? 'location-picker-map-host' : 'location-data-map-host';
+  const host = document.querySelector(`#${hostId}`);
+  if (!host) return;
+  const item = picker ? null : activeLocation();
+  host.outerHTML = renderMapCanvas({
+    ...mapView,
+    hazardLayer: picker ? 'none' : state.locations.map.hazardLayer,
+    opacity: state.locations.map.opacity
+  }, item, picker);
+  updateMapControlState();
+  const hazardLabel = document.querySelector('[data-current-hazard-label]');
+  if (hazardLabel) hazardLabel.textContent = HAZARD_MAP_LAYERS[state.locations.map.hazardLayer]?.name || '災害レイヤなし';
+  bindMapSurface({ picker });
+}
+
+function bindMapSurface({ picker = false } = {}) {
+  const hostId = picker ? 'location-picker-map-host' : 'location-data-map-host';
+  const host = document.querySelector(`#${hostId}`);
+  const surface = host?.querySelector('[data-map-surface]');
+  const mapGraphic = surface?.querySelector('.hazard-map');
+  if (!surface || !mapGraphic) return;
+
+  let drag = null;
+  let dragFrame = 0;
+  let pendingTransform = null;
+  const paintDrag = () => {
+    dragFrame = 0;
+    if (!pendingTransform) return;
+    mapGraphic.style.transform = `translate3d(${pendingTransform.x}px, ${pendingTransform.y}px, 0)`;
+    pendingTransform = null;
+  };
+  const resetVisualDrag = () => {
+    if (dragFrame) cancelAnimationFrame(dragFrame);
+    dragFrame = 0;
+    pendingTransform = null;
+    mapGraphic.style.transform = '';
+    surface.classList.remove('is-dragging');
+  };
+  const removeWindowListeners = () => {
+    window.removeEventListener('pointermove', handlePointerMove, true);
+    window.removeEventListener('pointerup', handlePointerUp, true);
+    window.removeEventListener('pointercancel', handlePointerCancel, true);
+  };
+  const finish = (event, cancelled = false) => {
+    if (!drag) return;
+    const current = drag;
+    drag = null;
+    removeWindowListeners();
+    try { surface.releasePointerCapture?.(event.pointerId); } catch {}
+    resetVisualDrag();
+    if (cancelled) return;
+    const rect = surface.getBoundingClientRect();
+    const dx = Number(event.clientX) - current.startX;
+    const dy = Number(event.clientY) - current.startY;
+    const moved = Math.hypot(dx, dy) >= 6;
+    if (moved) {
+      const viewDx = dx * 768 / Math.max(1, rect.width);
+      const viewDy = dy * 512 / Math.max(1, rect.height);
+      mapView = { ...mapView, ...moveMapCenterByPixels(mapView, viewDx, viewDy) };
+    } else if (picker) {
+      const point = pointFromViewport(
+        mapView,
+        (Number(event.clientX) - rect.left) / Math.max(1, rect.width),
+        (Number(event.clientY) - rect.top) / Math.max(1, rect.height),
+        768,
+        512
+      );
+      mapView = { ...mapView, ...point };
+    }
+    refreshMapViewport({ picker });
+  };
+  const handlePointerMove = (event) => {
+    if (!drag || (drag.pointerId !== null && event.pointerId !== drag.pointerId)) return;
+    pendingTransform = {
+      x: Number(event.clientX) - drag.startX,
+      y: Number(event.clientY) - drag.startY
+    };
+    if (!dragFrame) dragFrame = requestAnimationFrame(paintDrag);
+    event.preventDefault();
+  };
+  const handlePointerUp = (event) => {
+    if (!drag || (drag.pointerId !== null && event.pointerId !== drag.pointerId)) return;
+    finish(event);
+  };
+  const handlePointerCancel = (event) => {
+    if (!drag || (drag.pointerId !== null && event.pointerId !== drag.pointerId)) return;
+    finish(event, true);
+  };
+
+  surface.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0 && event.pointerType !== 'touch') return;
+    if (drag) return;
+    drag = {
+      startX: Number(event.clientX),
+      startY: Number(event.clientY),
+      pointerId: Number.isFinite(Number(event.pointerId)) ? Number(event.pointerId) : null
+    };
+    try { surface.setPointerCapture?.(event.pointerId); } catch {}
+    surface.classList.add('is-dragging');
+    window.addEventListener('pointermove', handlePointerMove, { capture: true, passive: false });
+    window.addEventListener('pointerup', handlePointerUp, true);
+    window.addEventListener('pointercancel', handlePointerCancel, true);
+    event.preventDefault();
+  });
+}
+
 function bindMapControls({ picker = false } = {}) {
   document.querySelectorAll('[data-map-move]').forEach((button) => button.addEventListener('click', () => {
     mapView = { ...mapView, ...moveMapCenter(mapView, button.dataset.mapMove) };
-    if (picker) {
-      locationDraft = { ...captureLocationFormDraft(), latitude: mapView.latitude.toFixed(6), longitude: mapView.longitude.toFixed(6) };
-    }
-    render();
+    refreshMapViewport({ picker });
   }));
   document.querySelectorAll('[data-map-zoom]').forEach((button) => button.addEventListener('click', () => {
-    mapView.zoom = clampZoom(mapView.zoom + (button.dataset.mapZoom === 'in' ? 1 : -1));
-    render();
+    mapView = { ...mapView, zoom: clampZoom(mapView.zoom + (button.dataset.mapZoom === 'in' ? 1 : -1)) };
+    refreshMapViewport({ picker });
   }));
   document.querySelectorAll('[data-map-reset]').forEach((button) => button.addEventListener('click', () => {
-    const source = picker ? captureLocationFormDraft() : activeLocation();
-    if (source && source.latitude !== '' && source.longitude !== '') resetMapViewFromPoint(source.latitude, source.longitude, 14);
-    render();
+    const source = picker ? pointFromLocationValue(captureLocationFormDraft()) : pointFromLocationValue(activeLocation());
+    mapView = source ? { ...mapView, ...source, zoom: 14 } : { ...DEFAULT_MAP_VIEW };
+    refreshMapViewport({ picker });
   }));
-  document.querySelector('.map-interactive')?.addEventListener('click', (event) => {
-    if (!picker) return;
-    const rect = event.currentTarget.getBoundingClientRect();
-    const point = pointFromViewport(mapView, (event.clientX - rect.left) / rect.width, (event.clientY - rect.top) / rect.height, 768, 512);
-    mapView = { ...mapView, ...point };
-    locationDraft = { ...captureLocationFormDraft(), latitude: point.latitude.toFixed(6), longitude: point.longitude.toFixed(6) };
-    render();
-  });
+  updateMapControlState();
+  bindMapSurface({ picker });
 }
 
 function bindLocations() {
@@ -2642,12 +2785,23 @@ function bindLocations() {
   if (visibleMapLocationId === 'picker') {
     bindMapControls({ picker: true });
     document.querySelector('#map-use-center')?.addEventListener('click', () => {
-      locationDraft = { ...captureLocationFormDraft(), latitude: Number(mapView.latitude).toFixed(6), longitude: Number(mapView.longitude).toFixed(6) };
+      const latitude = Number(mapView.latitude).toFixed(6);
+      const longitude = Number(mapView.longitude).toFixed(6);
+      locationDraft = { ...captureLocationFormDraft(), latitude, longitude };
+      const latitudeInput = document.querySelector('#location-latitude');
+      const longitudeInput = document.querySelector('#location-longitude');
+      if (latitudeInput) latitudeInput.value = latitude;
+      if (longitudeInput) longitudeInput.value = longitude;
       visibleMapLocationId = null;
-      render();
-      showToast('地図中央の場所をフォームへ入力しました。地点名を確認して登録してください。');
+      document.querySelector('.map-picker')?.remove();
+      document.querySelector('#location-name')?.focus({ preventScroll: true });
+      showToast('赤い照準の場所をフォームへ入力しました。地点名を確認して登録してください。');
     });
-    document.querySelector('#map-picker-close')?.addEventListener('click', () => { visibleMapLocationId = null; render(); });
+    document.querySelector('#map-picker-close')?.addEventListener('click', () => {
+      visibleMapLocationId = null;
+      document.querySelector('.map-picker')?.remove();
+      document.querySelector('[data-location-method="map"]')?.focus({ preventScroll: true });
+    });
   }
 
   document.querySelector('#location-map-show')?.addEventListener('click', showSelectedHazardMap);
@@ -2662,15 +2816,21 @@ function bindLocations() {
       state.locations.map.hazardLayer = nextLayer;
       mapView.hazardLayer = nextLayer;
       persistDebounced();
-      render();
+      refreshMapViewport({ picker: false });
     });
     document.querySelector('#hazard-map-opacity')?.addEventListener('input', (event) => {
       state.locations.map.opacity = Number(event.target.value) / 100;
       mapView.opacity = state.locations.map.opacity;
+      document.querySelectorAll('#location-data-map-host .hazard-tile').forEach((image) => image.setAttribute('opacity', String(state.locations.map.opacity)));
+      const label = document.querySelector('[data-map-opacity-label]');
+      if (label) label.textContent = `${Math.round(state.locations.map.opacity * 100)}%`;
       persistDebounced();
-      render();
     });
-    document.querySelector('#map-show-shelters')?.addEventListener('change', (event) => { state.locations.map.showShelters = event.target.checked; persistDebounced(); render(); });
+    document.querySelector('#map-show-shelters')?.addEventListener('change', (event) => {
+      state.locations.map.showShelters = event.target.checked;
+      persistDebounced();
+      refreshMapViewport({ picker: false });
+    });
     document.querySelector('#map-save-offline')?.addEventListener('click', () => saveOfflineMap(activeLocation()));
     document.querySelector('#map-clear-offline')?.addEventListener('click', () => clearOfflineMap(activeLocation()));
   }
@@ -2678,13 +2838,15 @@ function bindLocations() {
 
 async function openLocationPicker() {
   const draft = captureLocationFormDraft();
-  let latitude = Number(draft.latitude);
-  let longitude = Number(draft.longitude);
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) { latitude = 35.681236; longitude = 139.767125; }
-  const allowed = await requestNetworkPermission('map', null, `地図中央付近のタイル（緯度 ${latitude.toFixed(5)}、経度 ${longitude.toFixed(5)}）`);
+  const start = initialMapViewForLocation(draft);
+  const allowed = await requestNetworkPermission(
+    'map',
+    null,
+    `地図中央付近のタイル（緯度 ${Number(start.latitude).toFixed(5)}、経度 ${Number(start.longitude).toFixed(5)}）`
+  );
   if (!allowed) return;
-  locationDraft = { ...draft, latitude: latitude.toFixed(6), longitude: longitude.toFixed(6) };
-  resetMapViewFromPoint(latitude, longitude, 14);
+  locationDraft = { ...draft };
+  mapView = { ...start, hazardLayer: 'none', opacity: state.locations.map.opacity ?? 0.62 };
   visibleMapLocationId = 'picker';
   render();
 }
@@ -2755,14 +2917,22 @@ async function saveOfflineMap(item) {
   finally { main.removeAttribute('aria-busy'); }
 }
 
+async function deleteOfflineMapUrls(urls = []) {
+  if (!('caches' in window) || !Array.isArray(urls) || !urls.length) return;
+  const cacheNames = (await caches.keys()).filter((name) => name.startsWith('mamoreru-inochi-map-'));
+  await Promise.all(cacheNames.map(async (cacheName) => {
+    const cache = await caches.open(cacheName);
+    await Promise.all(urls.map((url) => cache.delete(url)));
+  }));
+}
+
 async function clearOfflineMap(item) {
   const entry = state.locations.offlineMaps.find((saved) => saved.locationId === item.id && saved.layerId === state.locations.map.hazardLayer && Number(saved.zoom) === Number(mapView.zoom));
   if (!entry) return;
   const confirmed = await confirmDialog('保存した周辺地図を削除しますか？', '登録地点や取得済みの文字情報は残り、この縮尺の地図タイルだけを削除します。', '削除する');
   if (!confirmed) return;
   try {
-    const cache = await caches.open(mapCacheName(APP_VERSION));
-    await Promise.all((entry.urls || []).map((url) => cache.delete(url)));
+    await deleteOfflineMapUrls(entry.urls || []);
     state.locations.offlineMaps = state.locations.offlineMaps.filter((saved) => saved.id !== entry.id);
     await persistCurrentState();
     render();
@@ -2776,8 +2946,7 @@ async function deleteLocation(id) {
   if (!confirmed) return;
   const offlineEntries = state.locations.offlineMaps.filter((entry) => entry.locationId === id);
   if ('caches' in window) {
-    const cache = await caches.open(mapCacheName(APP_VERSION));
-    for (const entry of offlineEntries) await Promise.all((entry.urls || []).map((url) => cache.delete(url)));
+    for (const entry of offlineEntries) await deleteOfflineMapUrls(entry.urls || []);
   }
   state.locations.offlineMaps = state.locations.offlineMaps.filter((entry) => entry.locationId !== id);
   state.locations.items = state.locations.items.filter((entry) => entry.id !== id);
@@ -2869,7 +3038,10 @@ async function fetchLocationPublicData(providerId) {
     render();
     showToast('公的情報を更新しました。');
   } catch (error) {
-    recordNetworkLog(providerId, provider.purpose, sent, `取得失敗: ${error.message || '不明なエラー'}`);
+    const providerCode = String(error?.providerCode || error?.code || '').trim();
+    const statusText = error?.httpStatus || error?.status ? `HTTP ${error.httpStatus || error.status}` : '';
+    const detail = [statusText, providerCode].filter(Boolean).join(' / ');
+    recordNetworkLog(providerId, provider.purpose, sent, `取得失敗${detail ? `（${detail}）` : ''}: ${error.message || '不明なエラー'}`);
     persistDebounced();
     render();
     showToast(error.message || '公的情報を取得できませんでした。', 'error');
@@ -2914,7 +3086,7 @@ function renderContacts() {
         <p><strong>火災・救急・消防による救助は119、事件・交通事故は110、海上の事件・事故は118です。</strong> 川・湖・池・用水路・プールなどで消防の救助が必要な場合は119へ通報します。</p>
       </section>
 
-      ${!isLocked && state.onboardingComplete ? `<section class="card section call-safety-settings"><div class="section-heading"><div><p class="eyebrow">誤操作防止</p><h2>電話をかける前に必ず確認します</h2></div><span class="badge ${state.contacts.strongCallLock ? 'warning' : 'success'}">${state.contacts.strongCallLock ? '追加ロックあり' : '2段階確認'}</span></div><p>番号を押しただけでは電話はかかりません。用途を確認した後に「電話アプリを開く」を選びます。</p><label class="storage-option"><input id="call-lock-toggle" type="checkbox"${state.contacts.strongCallLock ? ' checked' : ''}><span><strong>誤操作防止を強くする</strong><small>小さな子どもが触る端末などでは、確認画面でもう一度ロックを解除します。</small></span></label>${state.contacts.strongCallLock ? `<div class="button-row"><button class="button secondary small" type="button" data-action="unlock-calls-temporarily">10分間だけ追加ロックを解除</button></div>` : ''}</section>` : ''}
+      ${!isLocked && state.onboardingComplete ? `<section class="card section call-safety-settings"><div class="section-heading"><div><p class="eyebrow">誤操作防止</p><h2>電話をかける前に必ず確認します</h2></div><span class="badge ${state.contacts.strongCallLock ? 'warning' : 'success'}">${state.contacts.strongCallLock ? '追加ロックあり' : '2段階確認'}</span></div><p>番号を押しただけでは電話はかかりません。発信先と発信前に番号と用途を確認してから「電話アプリを開く」を選びます。</p><label class="storage-option"><input id="call-lock-toggle" type="checkbox"${state.contacts.strongCallLock ? ' checked' : ''}><span><strong>誤操作防止を強くする</strong><small>小さな子どもが触る端末などでは、確認画面でもう一度ロックを解除します。</small></span></label>${state.contacts.strongCallLock ? `<div class="button-row"><button class="button secondary small" type="button" data-action="unlock-calls-temporarily">10分間だけ追加ロックを解除</button></div>` : ''}</section>` : ''}
 
       ${categories.map((category) => `
         <section class="section" aria-labelledby="contact-${escapeHtml(category)}">
@@ -2965,7 +3137,7 @@ function renderOfficialContactCard(item) {
       <p class="contact-number">${escapeHtml(item.number)}</p>
       <p class="contact-use">${escapeHtml(summary)}</p>
       ${cautions?.length ? `<ul class="contact-caution">${cautions.map((text) => `<li>${escapeHtml(text)}</li>`).join('')}</ul>` : ''}
-      <div class="button-row"><button class="button${item.urgent ? ' danger' : ''} small" type="button" data-action="contact-call" data-contact-id="${escapeHtml(item.id)}">用途を確認する</button><a class="button subtle small" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">公式情報</a></div>
+      <div class="button-row"><button class="button${item.urgent ? ' danger' : ''} small" type="button" data-action="contact-call" data-contact-id="${escapeHtml(item.id)}">発信前に確認する</button><a class="button subtle small" href="${escapeHtml(item.sourceUrl)}" target="_blank" rel="noopener noreferrer">公式情報</a></div>
     </article>`;
 }
 
@@ -2976,7 +3148,7 @@ function renderCustomContactCard(item) {
       <h3>${escapeHtml(item.name)}</h3>
       <p class="contact-number">${escapeHtml(item.number)}</p>
       ${item.note ? `<p>${escapeHtml(item.note)}</p>` : ''}
-      <div class="button-row"><button class="button small" type="button" data-action="contact-call" data-custom-id="${escapeHtml(item.id)}">用途を確認する</button><button class="button secondary small" type="button" data-action="contact-edit" data-id="${escapeHtml(item.id)}">編集</button><button class="button danger small" type="button" data-action="contact-delete" data-id="${escapeHtml(item.id)}">削除</button></div>
+      <div class="button-row"><button class="button small" type="button" data-action="contact-call" data-custom-id="${escapeHtml(item.id)}">発信前に確認する</button><button class="button secondary small" type="button" data-action="contact-edit" data-id="${escapeHtml(item.id)}">編集</button><button class="button danger small" type="button" data-action="contact-delete" data-id="${escapeHtml(item.id)}">削除</button></div>
     </article>`;
 }
 
@@ -3098,7 +3270,7 @@ function renderInstallAndUpdates() {
       <div>
         <p class="eyebrow">スマホでこそ役立つ理由</p>
         <h2>URLを探す時間をなくし、備えを持ち歩く</h2>
-        <ul class="install-reasons"><li>災害時にアイコンを1回押して開ける</li><li>行動ガイドをオフラインでも確認できる</li><li>診断、備蓄、家族計画を持ち歩ける</li><li>更新版を同じアイコンから利用できる</li><li>無料・広告なし・アカウント不要</li></ul>
+        <ul class="install-reasons"><li>災害時にアイコンを1回押して開ける</li><li>行動ガイドをオフラインでも確認できる</li><li>診断、備蓄、家族の防災計画を持ち歩ける</li><li>更新版を同じアイコンから利用できる</li><li>無料・広告なし・アカウント不要</li></ul>
         <div class="button-row">${!standalone && deferredInstallPrompt ? '<button class="button install-primary" type="button" data-action="install-pwa">スマホに入れる</button>' : ''}${!standalone && !deferredInstallPrompt ? '<a class="button install-primary" href="#install-steps">追加手順を見る</a>' : ''}${standalone ? '<span class="badge success">スマホアプリとして利用中</span>' : ''}</div>
       </div>
     </section>
@@ -3110,9 +3282,9 @@ function renderInstallAndUpdates() {
 
     ${!env.mobile ? `<section class="card section pc-to-phone"><div><p class="eyebrow">PCで見ている方へ</p><h2>スマホへ送る</h2><p>スマホのカメラでQRコードを読み取るか、URLを共有してください。</p><div class="button-row"><button class="button secondary" type="button" id="copy-app-url">URLをコピー</button>${navigator.share ? '<button class="button secondary" type="button" id="share-app-url">共有する</button>' : ''}</div><p class="break-all"><code>${publicUrl}</code></p></div><div>${appQr}</div></section>` : ''}
 
-    <section class="card section"><p class="eyebrow">更新のしくみ</p><h2>GitHub Pagesが更新された後</h2><ol class="install-steps"><li>オンラインでアプリを開くと、起動時・オンライン復帰時・画面へ戻ったときに新しい版を確認します。</li><li>新しい版が見つかると、画面上部に案内します。入力中に強制再読込しません。</li><li>「更新する」を押すと新しい版へ切り替わります。診断・備蓄などの保存データは別の領域にあり、v0.3.0では旧形式を確認してから移行します。</li></ol><div class="notice warning"><p>ブラウザのサイトデータを削除した場合や端末故障では、保存内容が失われる場合があります。大切な内容はバックアップと紙にも残してください。</p></div></section>
+    <section class="card section"><p class="eyebrow">更新のしくみ</p><h2>GitHub Pagesが更新された後</h2><ol class="install-steps"><li>オンラインでアプリを開くと、起動時・オンライン復帰時・画面へ戻ったときに新しい版を確認します。</li><li>新しい版が見つかると、画面上部に案内します。入力中に強制再読込しません。</li><li>「更新する」を押すと新しい版へ切り替わります。診断・備蓄などの保存データは別の領域にあり、v0.3.1では旧形式を確認してから移行します。</li></ol><div class="notice warning"><p>ブラウザのサイトデータを削除した場合や端末故障では、保存内容が失われる場合があります。大切な内容はバックアップと紙にも残してください。</p></div></section>
 
-    <section class="card section"><h2>オフライン動作を確かめる</h2><ol class="install-steps"><li>オンラインで一度アプリを開き、「オフライン準備: 準備済み」を確認します。</li><li>機内モードをオンにします。</li><li>アプリを閉じて開き直し、災害時ガイド、診断結果、備蓄、家族計画を確認します。</li><li>確認後は機内モードを戻します。</li></ol></section>
+    <section class="card section"><h2>オフライン動作を確かめる</h2><ol class="install-steps"><li>オンラインで一度アプリを開き、「オフライン準備: 準備済み」を確認します。</li><li>機内モードをオンにします。</li><li>アプリを閉じて開き直し、災害時ガイド、診断結果、備蓄、家族の防災計画を確認します。</li><li>確認後は機内モードを戻します。</li></ol></section>
   </div>`;
 }
 
@@ -3214,7 +3386,7 @@ function renderEmergencyDetail(id) {
 
       <section class="card section">
         <p class="eyebrow">この状況で役立つ連絡先</p>
-        <h2>用途を確認して連絡する</h2>
+        <h2>発信前に番号を確認する</h2>
         ${renderEmergencyContactButtons(guide.contactIds || ['119', '110'])}
         <p class="small-text">命に危険がある場合は、相談窓口の返答を待たず緊急通報を優先してください。</p>
         <a class="button secondary small" href="#/contacts">連絡先の説明を詳しく見る</a>
@@ -3293,7 +3465,7 @@ function renderHelp() {
       <section class="grid three">
         <div class="card"><div class="card-icon" aria-hidden="true">1</div><h2>リスクを知る</h2><p>地形、住まい、家族、ライフライン、避難を質問形式で確認します。</p><a class="button small" href="#/diagnosis/area">診断へ</a></div>
         <div class="card"><div class="card-icon" aria-hidden="true">2</div><h2>備蓄を整える</h2><p>3日分と7日分を比較し、不足を一項目ずつ表示します。</p><a class="button small" href="#/stockpile/household">備蓄へ</a></div>
-        <div class="card"><div class="card-icon" aria-hidden="true">3</div><h2>家族で確認する</h2><p>家族計画を作り、必要な項目だけQRやファイルで共有します。</p><a class="button small" href="#/family">家族計画へ</a></div>
+        <div class="card"><div class="card-icon" aria-hidden="true">3</div><h2>家族で確認する</h2><p>家族の防災計画を作り、必要な項目だけQRやファイルで共有します。</p><a class="button small" href="#/family">家族の防災計画へ</a></div>
       </section>
 
       <section class="grid three section">
@@ -3335,7 +3507,7 @@ function renderHelp() {
         <div class="grid two">
           ${helpStorageCard('保存しない', '入力はメモリー上だけです。再読み込みや終了で消えます。')}
           ${helpStorageCard('診断結果だけ保存', '回答そのものを残さず、診断結果と表示設定だけを保存します。')}
-          ${helpStorageCard('この端末に保存', '診断、備蓄、家の安全、家族計画をIndexedDBへ保存します。')}
+          ${helpStorageCard('この端末に保存', '診断、備蓄、家の安全、家族の防災計画をIndexedDBへ保存します。')}
           ${helpStorageCard('暗号化して保存', 'AES-GCMで暗号化し、開くたびにパスフレーズを入力します。パスフレーズは復元できません。')}
         </div>
       </section>
@@ -3345,7 +3517,7 @@ function renderHelp() {
         <details><summary>診断の数字は、災害に遭う確率ですか？</summary><p>いいえ。公的な発生確率ではなく、入力内容から「備えを優先したい分野」を5段階で整理したアプリ独自の指標です。低い表示も安全を保証しません。</p></details>
         <details><summary>「わからない」が多くても使えますか？</summary><p>使えます。不明な回答を危険とも安全とも決めず、判定の確かさを下げ、「あとで確認すること」へ残します。</p></details>
         <details><summary>データはGitHub Pagesへ保存されますか？</summary><p>保存されません。GitHub Pagesはアプリ本体を配信するだけです。入力内容は、選択した方法に応じて、この端末のブラウザ内だけで扱います。</p></details>
-        <details><summary>オフラインで何が使えますか？</summary><p>一度正常に読み込み、オフライン準備が完了すれば、診断、備蓄、家の安全、家族計画、災害時ガイドを利用できます。最後に取得した地域情報は確認できますが、最新の警報・避難先情報を更新するには通信が必要です。</p></details>
+        <details><summary>オフラインで何が使えますか？</summary><p>一度正常に読み込み、オフライン準備が完了すれば、診断、備蓄、家の安全、家族の防災計画、災害時ガイドを利用できます。最後に取得した地域情報は確認できますが、最新の警報・避難先情報を更新するには通信が必要です。</p></details>
         <details><summary>端末を変えるにはどうしますか？</summary><p>「データと設定」からバックアップを書き出し、新しい端末で読み込みます。バックアップファイルには個人情報が含まれる場合があるため、安全に保管してください。</p></details>
         <details><summary>パスフレーズを忘れました</summary><p>アプリ開発者にも復元できません。保存データを削除してやり直す必要があります。重要な内容は暗号化バックアップや紙にも残してください。</p></details>
       </section>
@@ -3478,7 +3650,7 @@ function renderSettings() {
         <form id="storage-mode-form">
           <div class="grid two">
             ${storageOption('none', '保存しない', '変更後に端末内の保存データを削除します。現在の画面を閉じるまでは利用できます。', state.storageMode === 'none')}
-            ${storageOption('result', '診断結果だけ保存', '診断回答、備蓄、家族計画は端末へ残しません。', state.storageMode === 'result')}
+            ${storageOption('result', '診断結果だけ保存', '診断回答、備蓄、家族の防災計画は端末へ残しません。', state.storageMode === 'result')}
             ${storageOption('full', 'この端末に保存', '入力内容をブラウザ内へ保存します。', state.storageMode === 'full')}
             ${storageOption('protected', '暗号化して保存', '8文字以上のパスフレーズで保存内容を保護します。', state.storageMode === 'protected')}
           </div>
@@ -3490,7 +3662,7 @@ function renderSettings() {
       <section class="grid two section">
         <div class="card">
           <h2>バックアップ</h2>
-          <p>診断、備蓄、家の安全、家族計画、訓練記録をJSONファイルへ書き出します。端末変更やブラウザデータ消去に備えられます。</p>
+          <p>診断、備蓄、家の安全、家族の防災計画、訓練記録をJSONファイルへ書き出します。端末変更やブラウザデータ消去に備えられます。</p>
           <button class="button" type="button" data-action="export-backup">バックアップを書き出す</button>
           <p class="hint">暗号化保存を使っている場合、バックアップも暗号化します。それ以外のバックアップには個人情報が含まれる場合があります。</p>
         </div>
@@ -3515,7 +3687,7 @@ function renderSettings() {
 
       <section class="notice danger section">
         <h2>すべてのアプリデータを削除</h2>
-        <p>診断、備蓄、賞味期限、家の安全、家族計画、訓練記録、設定をこの端末から削除します。元に戻せません。</p>
+        <p>診断、備蓄、賞味期限、家の安全、家族の防災計画、訓練記録、設定をこの端末から削除します。元に戻せません。</p>
         <button class="button danger" type="button" data-action="delete-all-data">すべて削除する</button>
       </section>
 
@@ -3817,7 +3989,7 @@ function renderPrintPage() {
 
       <section class="card section">
         <h2>家族の防災計画</h2>
-        ${familyRows.length ? `<table class="summary-table"><tbody>${familyRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')}</tbody></table>` : '<p>家族計画は未登録です。</p>'}
+        ${familyRows.length ? `<table class="summary-table"><tbody>${familyRows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join('')}</tbody></table>` : '<p>家族の防災計画は未登録です。</p>'}
       </section>
 
       <section class="notice section">
@@ -3971,7 +4143,7 @@ async function handleBackupExport() {
   if (state.storageMode !== 'protected') {
     const confirmed = await confirmDialog(
       'バックアップを書き出しますか？',
-      'このバックアップは暗号化されません。家族計画や備蓄場所などが含まれる場合があるため、安全な場所へ保管してください。',
+      'このバックアップは暗号化されません。家族の防災計画や備蓄場所などが含まれる場合があるため、安全な場所へ保管してください。',
       '書き出す'
     );
     if (!confirmed) return;
@@ -3997,7 +4169,7 @@ async function handleBackupImport() {
   }
   const confirmed = await confirmDialog(
     'バックアップを読み込みますか？',
-    '現在の診断、備蓄、家族計画、設定は、バックアップの内容に置き換わります。先に現在のバックアップを書き出すことを勧めます。',
+    '現在の診断、備蓄、家族の防災計画、設定は、バックアップの内容に置き換わります。先に現在のバックアップを書き出すことを勧めます。',
     '読み込む'
   );
   if (!confirmed) return;
@@ -4029,7 +4201,7 @@ async function handleBackupImport() {
 async function handleDeleteAllData() {
   const confirmed = await confirmDialog(
     'すべてのアプリデータを削除しますか？',
-    '診断、備蓄、賞味期限、家の安全、家族計画、表示設定を削除します。元に戻せません。',
+    '診断、備蓄、賞味期限、家の安全、家族の防災計画、表示設定を削除します。元に戻せません。',
     'すべて削除'
   );
   if (!confirmed) return;

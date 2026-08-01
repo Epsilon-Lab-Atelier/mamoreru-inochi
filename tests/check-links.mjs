@@ -15,14 +15,14 @@ const links = [
 
 async function checkLink(label, url) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), 12000);
   try {
     const response = await fetch(url, {
       method: 'GET',
       redirect: 'follow',
       cache: 'no-store',
       signal: controller.signal,
-      headers: { 'user-agent': 'EpsilonLab-MamoreruInochi-LinkCheck/0.3.0' }
+      headers: { 'user-agent': 'EpsilonLab-MamoreruInochi-LinkCheck/0.3.1' }
     });
     return { label, url, status: response.status, finalUrl: response.url, hardFailure: [404, 410].includes(response.status) };
   } catch (error) {
@@ -32,8 +32,7 @@ async function checkLink(label, url) {
   }
 }
 
-const results = [];
-for (const [label, url] of links) results.push(await checkLink(label, url));
+const results = await Promise.all(links.map(([label, url]) => checkLink(label, url)));
 for (const item of results) {
   if (item.status) console.log(`${item.hardFailure ? 'ERROR' : 'OK'} ${item.status} ${item.label}: ${item.finalUrl || item.url}`);
   else console.warn(`WARN ${item.label}: ${item.warning}`);

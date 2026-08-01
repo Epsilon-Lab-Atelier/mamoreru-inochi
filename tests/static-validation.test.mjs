@@ -30,7 +30,7 @@ test('runtime HTML has no remote script or stylesheet dependencies', () => {
 
 test('OGP metadata uses an absolute 1200x630 preview image and concise description', () => {
   const html = read('index.html');
-  assert.match(html, /og:image" content="https:\/\/epsilon-lab-atelier\.github\.io\/mamoreru-inochi\/assets\/og-image\.png\?v=0\.3\.0/);
+  assert.match(html, /og:image" content="https:\/\/epsilon-lab-atelier\.github\.io\/mamoreru-inochi\/assets\/og-image\.png\?v=0\.3\.1/);
   assert.match(html, /og:image:width" content="1200"/);
   assert.match(html, /og:image:height" content="630"/);
   assert.match(html, /生活環境に合わせて、災害リスク・備蓄・緊急時の行動を確認できる無料の防災アプリです。/);
@@ -63,6 +63,9 @@ test('update flow waits for user action before activating a new worker', () => {
   assert.match(app, /serviceWorkerRegistration\.update\(\)/);
   assert.match(app, /data-action="apply-update"/);
   assert.match(worker, /event\.data\?\.type === 'SKIP_WAITING'/);
+  assert.match(worker, /key\.startsWith\('mamoreru-inochi-map-'\)\) return false/);
+  assert.match(app, /async function deleteOfflineMapUrls/);
+  assert.match(app, /caches\.keys\(\).*mamoreru-inochi-map-/s);
   const install = worker.match(/addEventListener\('install'[\s\S]*?\n\}\);/)?.[0] ?? '';
   assert.doesNotMatch(install, /skipWaiting/);
 });
@@ -78,7 +81,7 @@ test('public-data communication is restricted to approved official providers', (
   assert.doesNotMatch(read('src/app.js'), /\bfetch\s*\(/);
 });
 
-test('v0.3.0 exposes install, family sharing, drills, maps and call safeguards', () => {
+test('v0.3.1 keeps install, sharing, drills, maps and call safeguards', () => {
   const app = read('src/app.js');
   const readme = read('README.md');
   assert.match(app, /スマホでこそ役立つ防災アプリ/);
@@ -100,6 +103,43 @@ test('dead police consultation link is absent and replacement is present', () =>
 test('location search examples are neutral and do not contain a specific residence area', () => {
   const app = read('src/app.js');
   assert.match(app, /placeholder="例: 市区町村名 \/ 駅名・公共施設名"/);
+});
+
+
+test('v0.3.1 fixes J-SHIS requests and map-picker defaults', () => {
+  const publicData = read('src/public-data.js');
+  const map = read('src/map.js');
+  const app = read('src/app.js');
+  assert.doesNotMatch(publicData, /searchParams\.set\(['"]attr['"]/);
+  assert.match(publicData, /point\.latitude > 47/);
+  assert.match(publicData, /INVALID_REQUEST/);
+  assert.match(map, /DEFAULT_MAP_VIEW/);
+  assert.match(app, /赤い照準/);
+  assert.match(app, /optionalCoordinate/);
+  assert.match(app, /requestAnimationFrame\(paintDrag\)/);
+  assert.match(app, /latitudeInput\.value = latitude/);
+  assert.match(app, /longitudeInput\.value = longitude/);
+  assert.match(app, /document\.querySelector\('\.map-picker'\)\?\.remove\(\)/);
+});
+
+test('current labels clearly describe family disaster planning and call confirmation', () => {
+  const app = read('src/app.js');
+  const html = read('index.html');
+  const manifest = read('manifest.webmanifest');
+  assert.match(app, /家族の防災計画/);
+  assert.match(html, /家族の防災計画/);
+  assert.match(manifest, /家族の防災計画/);
+  assert.match(app, /発信前に確認する/);
+  assert.doesNotMatch(app, />用途を確認する</);
+});
+
+test('app icon depicts two people joining hands without the former horizontal hand bars', () => {
+  const icon = read('assets/icons/icon.svg');
+  assert.match(icon, /手を取り合う二人/);
+  assert.match(icon, /<circle cx="188" cy="350"/);
+  assert.match(icon, /<circle cx="324" cy="350"/);
+  assert.match(icon, /<circle cx="256" cy="384"/);
+  assert.doesNotMatch(icon, /M155 365h86/);
 });
 
 test('owner-only documents and release archives are ignored by Git', () => {

@@ -1,5 +1,5 @@
-const VERSION = '0.3.0';
-const CACHE_REVISION = 'privacy-hotfix-1';
+const VERSION = '0.3.1';
+const CACHE_REVISION = 'release-1';
 const STATIC_CACHE = `mamoreru-inochi-static-${VERSION}-${CACHE_REVISION}`;
 const RUNTIME_CACHE = `mamoreru-inochi-runtime-${VERSION}-${CACHE_REVISION}`;
 const MAP_CACHE = `mamoreru-inochi-map-${VERSION}`;
@@ -49,7 +49,12 @@ self.addEventListener('activate', (event) => {
     caches.keys()
       .then((keys) => Promise.all(
         keys
-          .filter((key) => key.startsWith('mamoreru-inochi-') && ![STATIC_CACHE, RUNTIME_CACHE, MAP_CACHE].includes(key))
+          // 利用者が明示的に保存した周辺地図は、アプリ更新だけでは削除しない。
+          // 古い静的キャッシュと実行時キャッシュだけを整理する。
+          .filter((key) => {
+            if (key.startsWith('mamoreru-inochi-map-')) return false;
+            return key.startsWith('mamoreru-inochi-') && ![STATIC_CACHE, RUNTIME_CACHE].includes(key);
+          })
           .map((key) => caches.delete(key))
       ))
       .then(() => self.clients.claim())

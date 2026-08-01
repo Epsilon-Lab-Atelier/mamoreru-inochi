@@ -4,6 +4,7 @@ import {
   buildGsiMapUrl,
   buildJshisUrl,
   fetchJmaWarnings,
+  fetchJshisHazard,
   formatProbability,
   haversineKm,
   normalizeCoordinates,
@@ -19,9 +20,65 @@ test('coordinates are validated and J-SHIS URL uses longitude,latitude', () => {
   const url = new URL(buildJshisUrl(35.68, 139.76));
   assert.equal(url.searchParams.get('position'), '139.76,35.68');
   assert.equal(url.searchParams.get('epsg'), '4326');
-  assert.match(url.searchParams.get('attr'), /T30_I55_PS/);
+  assert.equal(url.searchParams.has('attr'), false);
+  assert.doesNotThrow(() => buildJshisUrl(47, 139.76));
+  assert.throws(() => buildJshisUrl(47.0001, 139.76), /日本周辺/);
   assert.throws(() => buildJshisUrl(19.9, 139.76), /日本周辺/);
   assert.throws(() => buildJshisUrl(35.68, 154.1), /日本周辺/);
+});
+
+
+test('J-SHIS fetch requests all attributes once and preserves provider metadata', async () => {
+  let requestedUrl = '';
+  let requestedOptions = null;
+  const result = await fetchJshisHazard(35.68, 139.76, {
+    fetchImpl: async (url, options) => {
+      requestedUrl = String(url);
+      requestedOptions = options;
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({
+          status: 'Success',
+          type: 'FeatureCollection',
+          features: [{ properties: {
+            meshcode: '0000000000N',
+            T30_I45_PS: '0.9',
+            T30_I50_PS: '0.7',
+            T30_I55_PS: '0.2',
+            T30_I60_PS: '0.05'
+          } }],
+          metaData: { meshcode: '0000000000N', version: 'Y2024' }
+        })
+      };
+    }
+  });
+  const url = new URL(requestedUrl);
+  assert.equal(url.searchParams.has('attr'), false);
+  assert.equal(requestedOptions.credentials, 'omit');
+  assert.equal(result.meshcode, '0000000000N');
+  assert.equal(result.dataVersion, 'Y2024');
+  assert.equal(result.probabilities.intensity6Lower, 0.2);
+});
+
+test('J-SHIS HTTP errors retain the provider code and show a useful message', async () => {
+  await assert.rejects(
+    () => fetchJshisHazard(35.68, 139.76, {
+      fetchImpl: async () => ({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({ status: 'Error', error: { code: 'INVALID_REQUEST', message: 'invalid attr' }, features: [] })
+      })
+    }),
+    (error) => {
+      assert.equal(error.name, 'PublicDataError');
+      assert.equal(error.status, 400);
+      assert.equal(error.code, 'INVALID_REQUEST');
+      assert.match(error.message, /最新版/);
+      assert.equal(error.providerMessage, 'invalid attr');
+      return true;
+    }
+  );
 });
 
 test('J-SHIS probabilities are parsed as ratios and formatted as percent', () => {

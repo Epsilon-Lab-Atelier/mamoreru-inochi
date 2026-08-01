@@ -213,7 +213,7 @@ export const RISK_QUESTIONS = [
     effects: { yes: { evacuation: 5, lifeline: 2 }, no: {} },
     floors: { yes: { evacuation: 4 } },
     reasons: { yes: '移動に時間がかかる可能性があるため、一般より早い判断と支援者の確認が役立ちます。' },
-    recommendations: { yes: '誰が、どの方法で、いつ支援するかを家族計画に記録する。' }
+    recommendations: { yes: '誰が、どの方法で、いつ支援するかを家族の防災計画に記録する。' }
   },
   {
     id: 'medical-power',
@@ -344,7 +344,7 @@ export const RISK_QUESTIONS = [
     effects: { yes: {}, no: { evacuation: 5 } },
     floors: { no: { evacuation: 4 } },
     reasons: { no: '通信混雑時に家族が別々に動いてしまう可能性があります。' },
-    recommendations: { no: '第一・第二の集合場所と、171を含む連絡順を家族計画に記録する。' },
+    recommendations: { no: '第一・第二の集合場所と、171を含む連絡順を家族の防災計画に記録する。' },
     strengths: { yes: '家族が連絡できない場合のルールを決めています。' }
   },
   {
